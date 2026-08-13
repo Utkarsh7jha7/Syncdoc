@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import documentRoutes from "./routes/documentRoutes.js";
 import { createServer } from "http";
 import blockRoutes from "./routes/blockRoutes.js";
+import { setupYjsServer } from "./collaboration/yjsServer.js";
 
 import connectDB from "./config/db.js";
 
@@ -20,6 +21,7 @@ app.use(
 );
 
 app.use(express.json());
+
 app.use("/api/documents", documentRoutes);
 app.use("/api/blocks", blockRoutes);
 
@@ -33,6 +35,8 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
     await connectDB();
+
+    setupYjsServer(server);
 
     server.listen(PORT, () => {
         console.log(`SyncDoc server running on port ${PORT}`);

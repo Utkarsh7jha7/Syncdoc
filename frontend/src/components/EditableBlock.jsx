@@ -1,10 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 function EditableBlock({ block, onChange }) {
 
     const [content, setContent] = useState(block.content);
 
+    useEffect(() => {
+
+        setContent(block.content);
+
+    }, [block.content]);
+
     const handleChange = (event) => {
+
         const newContent = event.target.value;
 
         setContent(newContent);
@@ -13,6 +20,7 @@ function EditableBlock({ block, onChange }) {
     };
 
     if (block.type === "heading") {
+
         return (
             <input
                 value={content}
@@ -23,6 +31,7 @@ function EditableBlock({ block, onChange }) {
     }
 
     if (block.type === "code") {
+
         return (
             <textarea
                 value={content}
