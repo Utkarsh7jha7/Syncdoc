@@ -1,60 +1,87 @@
+import { WebSocketServer } from "ws";
 import * as Y from "yjs";
 
-export const createYjsConnection = (documentId) => {
+const documents = new Map();
 
-    const ydoc = new Y.Doc();
+export const setupYjsServer = (server) => {
 
-    const blocks = ydoc.getMap("blocks");
+    const wss = new WebSocketServer({
+        server
+    });
 
-    const socket = new WebSocket(
-        `ws://localhost:5000?documentId=${documentId}`
-    );
+    wss.on("connection", (ws, request) => {
 
-    socket.binaryType = "arraybuffer";
-
-    socket.onmessage = (event) => {
-
-        const update = new Uint8Array(event.data);
-
-        Y.applyUpdate(ydoc, update);
-    };
-
-    socket.onopen = () => {
-
-        console.log(
-            "Connected to collaboration server"
+        const url = new URL(
+            request.url,
+            "http://localhost"
         );
 
-        ydoc.on("update", (update, origin) => {
+        const documentId =
+            url.searchParams.get("documentId");
 
-            if (
-                origin !== "remote" &&
-                socket.readyState === WebSocket.OPEN
-            ) {
-                socket.send(update);
-            }
+        if (!documentId) {
+            ws.close();
+            return;
+        }
+
+        if (!documents.has(documentId)) {
+
+            documents.set(
+                documentId,
+                new Y.Doc()
+            );
+
+        }
+
+        const ydoc =
+            documents.get(documentId);
+
+        console.log(
+            `Client connected: ${documentId}`
+        );
+
+        ws.send(
+            Y.encodeStateAsUpdate(ydoc)
+        );
+
+        ws.on("message", (message) => {
+
+            const update =
+                new Uint8Array(message);
+
+            Y.applyUpdate(
+                ydoc,
+                update
+            );
+
+            wss.clients.forEach((client) => {
+
+                if (
+                    client !== ws &&
+                    client.readyState === 1
+                ) {
+
+                    client.send(update);
+
+                }
+
+            });
 
         });
-    };
 
-    socket.onclose = () => {
+        ws.on("close", () => {
 
-        console.log(
-            "Disconnected from collaboration server"
-        );
-    };
+            console.log(
+                `Client disconnected: ${documentId}`
+            );
 
-    socket.onerror = (error) => {
+        });
 
-        console.error(
-            "WebSocket error:",
-            error
-        );
-    };
+    });
 
-    return {
-        ydoc,
-        blocks,
-        socket
-    };
+    console.log(
+        "Yjs WebSocket server initialized"
+    );
+
+    return wss;
 };

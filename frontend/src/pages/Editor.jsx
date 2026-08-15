@@ -50,44 +50,44 @@ function Editor() {
 
                 data.document.blocks.forEach((block) => {
 
-    if (!blocks.has(block._id)) {
+                    if (!blocks.has(block._id)) {
 
-        const yBlock = new Y.Map();
+                        const yBlock = new Y.Map();
 
-        yBlock.set(
-            "type",
-            block.type
-        );
+                        yBlock.set(
+                            "type",
+                            block.type
+                        );
 
-        yBlock.set(
-            "level",
-            block.level || 0
-        );
+                        yBlock.set(
+                            "level",
+                            block.level || 0
+                        );
 
-        yBlock.set(
-            "language",
-            block.language || null
-        );
+                        yBlock.set(
+                            "language",
+                            block.language || null
+                        );
 
-        const yText = new Y.Text();
+                        const yText = new Y.Text();
 
-        yText.insert(
-            0,
-            block.content || ""
-        );
+                        yText.insert(
+                            0,
+                            block.content || ""
+                        );
 
-        yBlock.set(
-            "content",
-            yText
-        );
+                        yBlock.set(
+                            "content",
+                            yText
+                        );
 
-        blocks.set(
-            block._id,
-            yBlock
-        );
-    }
+                        blocks.set(
+                            block._id,
+                            yBlock
+                        );
+                    }
 
-});
+                });
 
                 console.log(
                     "YJS BLOCKS:",
@@ -206,15 +206,20 @@ function Editor() {
 
             <h1>{document.title}</h1>
 
-            {document.blocks.map((block) => (
+            {document.blocks.map((block) => {
 
-                <EditableBlock
-                    key={block._id}
-                    block={block}
-                    onChange={handleBlockChange}
-                />
+                const yBlock = yjsRef.current?.blocks.get(block._id);
 
-            ))}
+                return (
+                    <EditableBlock
+                        key={block._id}
+                        block={block}
+                        yBlock={yBlock}
+                        onChange={handleBlockChange}
+                    />
+                );
+
+            })}
 
         </div>
     );
