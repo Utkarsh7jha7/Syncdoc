@@ -6,24 +6,33 @@ function EditableBlock({
     onChange
 }) {
 
-    // Get Y.Text from Y.Map
     const yText = yBlock?.get("content");
 
     const [content, setContent] = useState(
         yText
             ? yText.toString()
-            : block.content
+            : block.content || ""
     );
 
     // =========================================
-    // LISTEN FOR REMOTE YJS CHANGES
+    // LISTEN FOR YJS CHANGES
     // =========================================
 
     useEffect(() => {
 
         if (!yText) {
+            console.log(
+                "NO Y.TEXT FOR BLOCK:",
+                block._id
+            );
+
             return;
         }
+
+        console.log(
+            "Y.TEXT OBSERVER ATTACHED:",
+            block._id
+        );
 
         const handleYjsChange = () => {
 
@@ -39,11 +48,14 @@ function EditableBlock({
 
         };
 
-        yText.observe(
-            handleYjsChange
-        );
+        yText.observe(handleYjsChange);
 
         return () => {
+
+            console.log(
+                "Y.TEXT OBSERVER REMOVED:",
+                block._id
+            );
 
             yText.unobserve(
                 handleYjsChange
@@ -51,7 +63,7 @@ function EditableBlock({
 
         };
 
-    }, [yText]);
+    }, [yText, block._id]);
 
     // =========================================
     // USER TYPES
@@ -62,6 +74,7 @@ function EditableBlock({
         const newContent =
             event.target.value;
 
+        // Update React immediately
         setContent(newContent);
 
         if (yText) {
@@ -69,7 +82,10 @@ function EditableBlock({
             const oldContent =
                 yText.toString();
 
-            // Find first changed character
+            // ---------------------------------
+            // Find changed section
+            // ---------------------------------
+
             let start = 0;
 
             while (
@@ -83,7 +99,10 @@ function EditableBlock({
 
             }
 
-            // Find last unchanged characters
+            // ---------------------------------
+            // Find unchanged ending
+            // ---------------------------------
+
             let oldEnd =
                 oldContent.length;
 
@@ -111,7 +130,21 @@ function EditableBlock({
                     newEnd
                 );
 
-            // Apply change to Y.Text
+            console.log(
+                "LOCAL EDIT:",
+                {
+                    oldContent,
+                    newContent,
+                    start,
+                    deleteLength,
+                    insertedText
+                }
+            );
+
+            // ---------------------------------
+            // Update Y.Text
+            // ---------------------------------
+
             yText.doc.transact(() => {
 
                 if (deleteLength > 0) {
@@ -138,7 +171,10 @@ function EditableBlock({
 
         }
 
-        // Save to MongoDB
+        // -------------------------------------
+        // Save local change to MongoDB
+        // -------------------------------------
+
         onChange(
             block._id,
             newContent

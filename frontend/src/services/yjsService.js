@@ -1,14 +1,27 @@
 import * as Y from "yjs";
+import * as awarenessProtocol from "y-protocols/awareness";
 
-export const createYjsConnection = (documentId) => {
+export const createYjsConnection = (documentId, currentUser) => {
 
-    // Create Yjs document
     const ydoc = new Y.Doc();
 
-    // Map containing all blocks
     const blocks = ydoc.getMap("blocks");
 
-    // Connect to backend WebSocket
+    // -----------------------------------------
+    // Awareness
+    // -----------------------------------------
+
+    const awareness =
+        new awarenessProtocol.Awareness(ydoc);
+
+    awareness.setLocalStateField("user", {
+        name: currentUser
+    });
+
+    // -----------------------------------------
+    // WebSocket
+    // -----------------------------------------
+
     const socket = new WebSocket(
         `ws://localhost:5000?documentId=${documentId}`
     );
@@ -17,93 +30,152 @@ export const createYjsConnection = (documentId) => {
 
     let connected = false;
 
-    // Store updates that happen before
-    // WebSocket connection is ready
-    const pendingUpdates = [];
+    const pendingMessages = [];
 
     // =========================================
-    // LOCAL YJS UPDATE
+    // YJS DOCUMENT UPDATE
     // =========================================
 
     ydoc.on("update", (update, origin) => {
 
-        console.log("YJS UPDATE CREATED");
-
-        console.log("Origin:", origin);
-
-        console.log(
-            "Update size:",
-            update.length
-        );
-
-        // Don't send updates received
-        // from another user back to server
         if (origin === "remote") {
-
-            console.log(
-                "REMOTE UPDATE -> NOT SENDING BACK"
-            );
-
             return;
         }
 
-        // Send immediately if socket is ready
+        const message = new Uint8Array(
+            update.length + 1
+        );
+
+        // 0 = Yjs update
+        message[0] = 0;
+
+        message.set(update, 1);
+
         if (
             connected &&
             socket.readyState === WebSocket.OPEN
         ) {
 
             console.log(
-                "SENDING LOCAL UPDATE TO SERVER"
+                "Sending YJS update"
             );
 
-            socket.send(update);
+            socket.send(message);
 
-            return;
+        } else {
+
+            pendingMessages.push(message);
+
         }
-
-        // Otherwise store it temporarily
-        console.log(
-            "WEBSOCKET NOT READY -> QUEUING UPDATE"
-        );
-
-        pendingUpdates.push(update);
 
     });
 
     // =========================================
-    // RECEIVE UPDATE FROM SERVER
+    // AWARENESS UPDATE
+    // =========================================
+
+    awareness.on(
+        "update",
+        ({ added, updated, removed }) => {
+
+            const clients = [
+                ...added,
+                ...updated,
+                ...removed
+            ];
+
+            if (clients.length === 0) {
+                return;
+            }
+
+            const update =
+                awarenessProtocol.encodeAwarenessUpdate(
+                    awareness,
+                    clients
+                );
+
+            const message = new Uint8Array(
+                update.length + 1
+            );
+
+            // 1 = Awareness update
+            message[0] = 1;
+
+            message.set(update, 1);
+
+            if (
+                connected &&
+                socket.readyState === WebSocket.OPEN
+            ) {
+
+                console.log(
+                    "Sending awareness update"
+                );
+
+                socket.send(message);
+
+            }
+
+        }
+    );
+
+    // =========================================
+    // RECEIVE MESSAGE
     // =========================================
 
     socket.onmessage = (event) => {
 
-        console.log(
-            "UPDATE RECEIVED FROM SERVER"
-        );
-
-        const update =
+        const message =
             new Uint8Array(event.data);
 
-        console.log(
-            "Remote update size:",
-            update.length
-        );
+        if (message.length === 0) {
+            return;
+        }
 
-        // Apply as remote update
-        Y.applyUpdate(
-            ydoc,
-            update,
-            "remote"
-        );
+        const type = message[0];
 
-        console.log(
-            "REMOTE UPDATE APPLIED"
-        );
+        const data = message.slice(1);
+
+        // -------------------------------------
+        // YJS UPDATE
+        // -------------------------------------
+
+        if (type === 0) {
+
+            console.log(
+                "Received YJS update"
+            );
+
+            Y.applyUpdate(
+                ydoc,
+                data,
+                "remote"
+            );
+
+        }
+
+        // -------------------------------------
+        // AWARENESS UPDATE
+        // -------------------------------------
+
+        if (type === 1) {
+
+            console.log(
+                "Received awareness update"
+            );
+
+            awarenessProtocol.applyAwarenessUpdate(
+                awareness,
+                data,
+                "remote"
+            );
+
+        }
 
     };
 
     // =========================================
-    // WEBSOCKET CONNECTED
+    // CONNECTED
     // =========================================
 
     socket.onopen = () => {
@@ -114,23 +186,43 @@ export const createYjsConnection = (documentId) => {
             "CONNECTED TO COLLABORATION SERVER"
         );
 
-        // Send updates that happened
-        // before WebSocket opened
+        // Send queued Yjs updates
         while (
-            pendingUpdates.length > 0
+            pendingMessages.length > 0
         ) {
 
-            const update =
-                pendingUpdates.shift();
+            const message =
+                pendingMessages.shift();
 
-            socket.send(update);
+            socket.send(message);
 
         }
+
+        // Send our awareness state
+        const awarenessUpdate =
+            awarenessProtocol.encodeAwarenessUpdate(
+                awareness,
+                [awareness.clientID]
+            );
+
+        const awarenessMessage =
+            new Uint8Array(
+                awarenessUpdate.length + 1
+            );
+
+        awarenessMessage[0] = 1;
+
+        awarenessMessage.set(
+            awarenessUpdate,
+            1
+        );
+
+        socket.send(awarenessMessage);
 
     };
 
     // =========================================
-    // WEBSOCKET CLOSED
+    // CLOSED
     // =========================================
 
     socket.onclose = () => {
@@ -138,13 +230,13 @@ export const createYjsConnection = (documentId) => {
         connected = false;
 
         console.log(
-            "DISCONNECTED FROM COLLABORATION SERVER"
+            "DISCONNECTED FROM SERVER"
         );
 
     };
 
     // =========================================
-    // WEBSOCKET ERROR
+    // ERROR
     // =========================================
 
     socket.onerror = (error) => {
@@ -159,6 +251,7 @@ export const createYjsConnection = (documentId) => {
     return {
         ydoc,
         blocks,
-        socket
+        socket,
+        awareness
     };
 };

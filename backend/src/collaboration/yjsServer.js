@@ -20,9 +20,15 @@ export const setupYjsServer = (server) => {
             url.searchParams.get("documentId");
 
         if (!documentId) {
+
             ws.close();
+
             return;
         }
+
+        // =========================================
+        // CREATE DOCUMENT
+        // =========================================
 
         if (!documents.has(documentId)) {
 
@@ -40,34 +46,99 @@ export const setupYjsServer = (server) => {
             `Client connected: ${documentId}`
         );
 
-        ws.send(
-            Y.encodeStateAsUpdate(ydoc)
+        // =========================================
+        // SEND INITIAL DOCUMENT STATE
+        // =========================================
+
+        const initialUpdate =
+            Y.encodeStateAsUpdate(ydoc);
+
+        const initialMessage =
+            new Uint8Array(
+                initialUpdate.length + 1
+            );
+
+        initialMessage[0] = 0;
+
+        initialMessage.set(
+            initialUpdate,
+            1
         );
+
+        ws.send(initialMessage);
+
+        // =========================================
+        // RECEIVE MESSAGE
+        // =========================================
 
         ws.on("message", (message) => {
 
-            const update =
+            const data =
                 new Uint8Array(message);
 
-            Y.applyUpdate(
-                ydoc,
-                update
-            );
+            if (data.length === 0) {
+                return;
+            }
 
-            wss.clients.forEach((client) => {
+            const messageType =
+                data[0];
 
-                if (
-                    client !== ws &&
-                    client.readyState === 1
-                ) {
+            const payload =
+                data.slice(1);
 
-                    client.send(update);
+            // =====================================
+            // YJS DOCUMENT UPDATE
+            // =====================================
+
+            if (messageType === 0) {
+
+                console.log(
+                    "SERVER: YJS UPDATE"
+                );
+
+                Y.applyUpdate(
+                    ydoc,
+                    payload
+                );
+
+            }
+
+            // =====================================
+            // AWARENESS UPDATE
+            // =====================================
+
+            else if (messageType === 1) {
+
+                console.log(
+                    "SERVER: AWARENESS UPDATE"
+                );
+
+            }
+
+            // =====================================
+            // BROADCAST
+            // =====================================
+
+            wss.clients.forEach(
+                (client) => {
+
+                    if (
+                        client !== ws &&
+                        client.readyState === 1
+                    ) {
+
+                        client.send(data);
+
+                    }
 
                 }
-
-            });
+            );
 
         });
+
+        // =========================================
+        // DISCONNECT
+        // =========================================
 
         ws.on("close", () => {
 

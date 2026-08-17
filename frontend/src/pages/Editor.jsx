@@ -7,15 +7,25 @@ import EditableBlock from "../components/EditableBlock";
 import { useEffect, useRef, useState } from "react";
 import { createYjsConnection } from "../services/yjsService";
 import * as Y from "yjs";
+import {
+    getCurrentUser
+} from "../services/userService";
 
 const DOCUMENT_ID = "6a7c775e1e1354cef663ebc5";
 
 function Editor() {
 
-    console.log("EDITOR COMPONENT IS RUNNING");
 
-    const [document, setDocument] = useState(null);
-    const [loading, setLoading] = useState(true);
+    console.log("EDITOR COMPONENT IS RUNNING");
+    const currentUser = getCurrentUser();
+
+    console.log(
+        "Current user:",
+        currentUser
+    );
+const [document, setDocument] = useState(null);
+const [loading, setLoading] = useState(true);
+const [onlineUsers, setOnlineUsers] = useState([]);
 
     const saveTimers = useRef({});
     const yjsRef = useRef(null);
@@ -40,54 +50,100 @@ function Editor() {
 
                 console.log("DOCUMENT SET");
 
-                const connection = createYjsConnection(DOCUMENT_ID);
-
+const connection = createYjsConnection(
+    DOCUMENT_ID,
+    currentUser
+);
                 console.log("YJS CONNECTION CREATED");
 
-                yjsRef.current = connection;
+yjsRef.current = connection;
+
+console.log(
+    "CURRENT USER:",
+    currentUser
+);
+
+console.log(
+    "AWARENESS STATE:",
+    connection.awareness.getStates()
+);
+
+// =========================================
+// LISTEN FOR ONLINE USERS
+// =========================================
+
+const updateOnlineUsers = () => {
+
+    const states =
+        Array.from(
+            connection.awareness
+                .getStates()
+                .values()
+        );
+
+    const users = states
+        .map((state) => state.user)
+        .filter(Boolean);
+
+    console.log(
+        "ONLINE USERS:",
+        users
+    );
+
+    setOnlineUsers(users);
+};
+
+connection.awareness.on(
+    "change",
+    updateOnlineUsers
+);
+
+// Get initial users
+updateOnlineUsers();
 
                 const { blocks } = connection;
 
-                data.document.blocks.forEach((block) => {
+           if (blocks.size === 0) {
 
-                    if (!blocks.has(block._id)) {
+    data.document.blocks.forEach((block) => {
 
-                        const yBlock = new Y.Map();
+        const yBlock = new Y.Map();
 
-                        yBlock.set(
-                            "type",
-                            block.type
-                        );
+        yBlock.set(
+            "type",
+            block.type
+        );
 
-                        yBlock.set(
-                            "level",
-                            block.level || 0
-                        );
+        yBlock.set(
+            "level",
+            block.level || 0
+        );
 
-                        yBlock.set(
-                            "language",
-                            block.language || null
-                        );
+        yBlock.set(
+            "language",
+            block.language || null
+        );
 
-                        const yText = new Y.Text();
+        const yText = new Y.Text();
 
-                        yText.insert(
-                            0,
-                            block.content || ""
-                        );
+        yText.insert(
+            0,
+            block.content || ""
+        );
 
-                        yBlock.set(
-                            "content",
-                            yText
-                        );
+        yBlock.set(
+            "content",
+            yText
+        );
 
-                        blocks.set(
-                            block._id,
-                            yBlock
-                        );
-                    }
+        blocks.set(
+            block._id,
+            yBlock
+        );
 
-                });
+    });
+
+}
 
                 console.log(
                     "YJS BLOCKS:",
@@ -112,17 +168,20 @@ function Editor() {
         // THIS WAS MISSING
         loadDocument();
 
-        return () => {
+       return () => {
 
-            if (yjsRef.current) {
+    if (yjsRef.current) {
 
-                yjsRef.current.socket.close();
-                yjsRef.current.ydoc.destroy();
+        yjsRef.current.awareness.destroy();
 
-                yjsRef.current = null;
-            }
+        yjsRef.current.socket.close();
 
-        };
+        yjsRef.current.ydoc.destroy();
+
+        yjsRef.current = null;
+    }
+
+};
 
     }, []);
 
@@ -205,6 +264,46 @@ function Editor() {
         <div>
 
             <h1>{document.title}</h1>
+
+            <div
+                style={{
+                    marginBottom: "20px",
+                    padding: "10px",
+                    background: "#1f2937",
+                    color: "white",
+                    borderRadius: "8px",
+                    width: "fit-content"
+                }}
+            >
+                Editing as: <strong>{currentUser}</strong>
+            </div>
+            <div
+    style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        marginBottom: "20px",
+        flexWrap: "wrap"
+    }}
+>
+    <strong>Online:</strong>
+
+    {onlineUsers.map((user, index) => (
+
+        <span
+            key={index}
+            style={{
+                padding: "5px 10px",
+                borderRadius: "20px",
+                background: "#1f7a4d",
+                color: "white"
+            }}
+        >
+            🟢 {user.name}
+        </span>
+
+    ))}
+</div>
 
             {document.blocks.map((block) => {
 
