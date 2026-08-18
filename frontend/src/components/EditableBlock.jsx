@@ -3,7 +3,9 @@ import { useEffect, useState } from "react";
 function EditableBlock({
     block,
     yBlock,
-    onChange
+    onChange,
+    onFocus,
+    onBlur
 }) {
 
     const yText = yBlock?.get("content");
@@ -15,47 +17,29 @@ function EditableBlock({
     );
 
     // =========================================
-    // LISTEN FOR YJS CHANGES
+    // LISTEN FOR REMOTE YJS CHANGES
     // =========================================
 
     useEffect(() => {
 
         if (!yText) {
-            console.log(
-                "NO Y.TEXT FOR BLOCK:",
-                block._id
-            );
-
             return;
         }
-
-        console.log(
-            "Y.TEXT OBSERVER ATTACHED:",
-            block._id
-        );
 
         const handleYjsChange = () => {
 
             const newContent =
                 yText.toString();
 
-            console.log(
-                "EDITABLE BLOCK RECEIVED YJS CHANGE:",
-                newContent
-            );
-
             setContent(newContent);
 
         };
 
-        yText.observe(handleYjsChange);
+        yText.observe(
+            handleYjsChange
+        );
 
         return () => {
-
-            console.log(
-                "Y.TEXT OBSERVER REMOVED:",
-                block._id
-            );
 
             yText.unobserve(
                 handleYjsChange
@@ -63,10 +47,10 @@ function EditableBlock({
 
         };
 
-    }, [yText, block._id]);
+    }, [yText]);
 
     // =========================================
-    // USER TYPES
+    // HANDLE TEXT CHANGE
     // =========================================
 
     const handleChange = (event) => {
@@ -74,17 +58,12 @@ function EditableBlock({
         const newContent =
             event.target.value;
 
-        // Update React immediately
         setContent(newContent);
 
         if (yText) {
 
             const oldContent =
                 yText.toString();
-
-            // ---------------------------------
-            // Find changed section
-            // ---------------------------------
 
             let start = 0;
 
@@ -94,14 +73,8 @@ function EditableBlock({
                 oldContent[start] ===
                     newContent[start]
             ) {
-
                 start++;
-
             }
-
-            // ---------------------------------
-            // Find unchanged ending
-            // ---------------------------------
 
             let oldEnd =
                 oldContent.length;
@@ -115,10 +88,8 @@ function EditableBlock({
                 oldContent[oldEnd - 1] ===
                     newContent[newEnd - 1]
             ) {
-
                 oldEnd--;
                 newEnd--;
-
             }
 
             const deleteLength =
@@ -129,21 +100,6 @@ function EditableBlock({
                     start,
                     newEnd
                 );
-
-            console.log(
-                "LOCAL EDIT:",
-                {
-                    oldContent,
-                    newContent,
-                    start,
-                    deleteLength,
-                    insertedText
-                }
-            );
-
-            // ---------------------------------
-            // Update Y.Text
-            // ---------------------------------
 
             yText.doc.transact(() => {
 
@@ -156,9 +112,7 @@ function EditableBlock({
 
                 }
 
-                if (
-                    insertedText.length > 0
-                ) {
+                if (insertedText.length > 0) {
 
                     yText.insert(
                         start,
@@ -171,16 +125,163 @@ function EditableBlock({
 
         }
 
-        // -------------------------------------
-        // Save local change to MongoDB
-        // -------------------------------------
-
         onChange(
             block._id,
             newContent
         );
 
     };
+
+    // =========================================
+    // COMMON TEXTAREA PROPERTIES
+    // =========================================
+
+    const commonProps = {
+        value: content,
+
+        onChange: handleChange,
+
+        onFocus: () => {
+            onFocus(block._id);
+        },
+
+        onBlur: () => {
+            onBlur(block._id);
+        },
+
+        style: {
+            width: "100%",
+            padding: "10px",
+            color: "white",
+            borderRadius: "8px",
+            resize: "vertical",
+            outline: "none"
+        }
+    };
+
+    // =========================================
+    // HEADING
+    // =========================================
+
+    if (block.type === "heading") {
+
+        return (
+            <div
+                style={{
+                    marginBottom: "15px"
+                }}
+            >
+
+                <textarea
+                    {...commonProps}
+                    rows={1}
+                    style={{
+                        ...commonProps.style,
+
+                        fontSize:
+                            block.level === 1
+                                ? "30px"
+                                : block.level === 3
+                                ? "22px"
+                                : "26px",
+
+                        fontWeight: "bold",
+
+                        background: "#151C2C",
+
+                        border:
+                            "1px solid #374151"
+                    }}
+                />
+
+            </div>
+        );
+    }
+
+    // =========================================
+    // CODE BLOCK
+    // =========================================
+
+    if (block.type === "code") {
+
+        return (
+            <div
+                style={{
+                    marginBottom: "15px"
+                }}
+            >
+
+                <textarea
+                    {...commonProps}
+                    rows={6}
+                    spellCheck={false}
+                    style={{
+                        ...commonProps.style,
+
+                        background: "#111827",
+
+                        color: "#e5e7eb",
+
+                        fontFamily:
+                            "monospace",
+
+                        fontSize: "14px",
+
+                        border:
+                            "1px solid #374151"
+                    }}
+                />
+
+            </div>
+        );
+    }
+
+    // =========================================
+    // BULLET
+    // =========================================
+
+    if (block.type === "bullet") {
+
+        return (
+            <div
+                style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    marginBottom: "10px"
+                }}
+            >
+
+                <span
+                    style={{
+                        color: "white",
+                        fontSize: "20px",
+                        marginRight: "10px"
+                    }}
+                >
+                    •
+                </span>
+
+                <textarea
+                    {...commonProps}
+                    rows={1}
+                    style={{
+                        ...commonProps.style,
+
+                        background:
+                            "#151C2C",
+
+                        border:
+                            "1px solid #374151"
+                    }}
+                />
+
+            </div>
+        );
+    }
+
+    // =========================================
+    // DEFAULT = PARAGRAPH
+    // =========================================
 
     return (
         <div
@@ -190,18 +291,17 @@ function EditableBlock({
         >
 
             <textarea
-                value={content}
-                onChange={handleChange}
+                {...commonProps}
                 rows={3}
                 style={{
-                    width: "100%",
-                    padding: "10px",
-                    fontSize: "16px",
+                    ...commonProps.style,
+
                     background: "#151C2C",
-                    color: "white",
-                    border: "1px solid #374151",
-                    borderRadius: "8px",
-                    resize: "vertical"
+
+                    border:
+                        "1px solid #374151",
+
+                    fontSize: "16px"
                 }}
             />
 

@@ -1,15 +1,18 @@
 import * as Y from "yjs";
 import * as awarenessProtocol from "y-protocols/awareness";
 
-export const createYjsConnection = (documentId, currentUser) => {
+export const createYjsConnection = (
+    documentId,
+    currentUser
+) => {
 
     const ydoc = new Y.Doc();
 
     const blocks = ydoc.getMap("blocks");
 
-    // -----------------------------------------
-    // Awareness
-    // -----------------------------------------
+    // =========================================
+    // AWARENESS
+    // =========================================
 
     const awareness =
         new awarenessProtocol.Awareness(ydoc);
@@ -18,9 +21,9 @@ export const createYjsConnection = (documentId, currentUser) => {
         name: currentUser
     });
 
-    // -----------------------------------------
-    // WebSocket
-    // -----------------------------------------
+    // =========================================
+    // WEBSOCKET
+    // =========================================
 
     const socket = new WebSocket(
         `ws://localhost:5000?documentId=${documentId}`
@@ -55,10 +58,6 @@ export const createYjsConnection = (documentId, currentUser) => {
             connected &&
             socket.readyState === WebSocket.OPEN
         ) {
-
-            console.log(
-                "Sending YJS update"
-            );
 
             socket.send(message);
 
@@ -108,10 +107,6 @@ export const createYjsConnection = (documentId, currentUser) => {
                 socket.readyState === WebSocket.OPEN
             ) {
 
-                console.log(
-                    "Sending awareness update"
-                );
-
                 socket.send(message);
 
             }
@@ -136,15 +131,11 @@ export const createYjsConnection = (documentId, currentUser) => {
 
         const data = message.slice(1);
 
-        // -------------------------------------
+        // =====================================
         // YJS UPDATE
-        // -------------------------------------
+        // =====================================
 
         if (type === 0) {
-
-            console.log(
-                "Received YJS update"
-            );
 
             Y.applyUpdate(
                 ydoc,
@@ -154,15 +145,11 @@ export const createYjsConnection = (documentId, currentUser) => {
 
         }
 
-        // -------------------------------------
+        // =====================================
         // AWARENESS UPDATE
-        // -------------------------------------
+        // =====================================
 
-        if (type === 1) {
-
-            console.log(
-                "Received awareness update"
-            );
+        else if (type === 1) {
 
             awarenessProtocol.applyAwarenessUpdate(
                 awareness,
@@ -222,6 +209,44 @@ export const createYjsConnection = (documentId, currentUser) => {
     };
 
     // =========================================
+    // CLOSE CONNECTION
+    // =========================================
+
+    const destroy = () => {
+
+        console.log(
+            "DESTROYING YJS CONNECTION"
+        );
+
+        connected = false;
+
+        // Remove our awareness state
+        awarenessProtocol.removeAwarenessStates(
+            awareness,
+            [awareness.clientID],
+            "local"
+        );
+
+        // Close WebSocket
+        if (
+            socket.readyState === WebSocket.OPEN ||
+            socket.readyState === WebSocket.CONNECTING
+        ) {
+
+            socket.close();
+
+        }
+
+        // Destroy Yjs document
+        ydoc.destroy();
+
+        console.log(
+            "YJS CONNECTION DESTROYED"
+        );
+
+    };
+
+    // =========================================
     // CLOSED
     // =========================================
 
@@ -252,6 +277,7 @@ export const createYjsConnection = (documentId, currentUser) => {
         ydoc,
         blocks,
         socket,
-        awareness
+        awareness,
+        destroy
     };
 };

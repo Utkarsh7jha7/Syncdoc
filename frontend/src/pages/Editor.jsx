@@ -1,6 +1,7 @@
 import {
     getDocument,
-    updateBlock
+    updateBlock,
+    createBlock
 } from "../services/documentService";
 
 import EditableBlock from "../components/EditableBlock";
@@ -26,6 +27,7 @@ function Editor() {
 const [document, setDocument] = useState(null);
 const [loading, setLoading] = useState(true);
 const [onlineUsers, setOnlineUsers] = useState([]);
+const [activeUsers, setActiveUsers] = useState({});
 
     const saveTimers = useRef({});
     const yjsRef = useRef(null);
@@ -67,6 +69,53 @@ console.log(
     "AWARENESS STATE:",
     connection.awareness.getStates()
 );
+const handleAddBlock = async (type) => {
+
+    try {
+
+        let blockData = {
+            type,
+            content: "",
+            level: type === "heading" ? 2 : 0,
+            language: type === "code"
+                ? "javascript"
+                : null
+        };
+
+        console.log(
+            "Creating block:",
+            blockData
+        );
+
+        const data =
+            await createBlock(blockData);
+
+        console.log(
+            "Block created:",
+            data
+        );
+
+        const newBlock =
+            data.block;
+
+        setDocument((previousDocument) => ({
+            ...previousDocument,
+
+            blocks: [
+                ...previousDocument.blocks,
+                newBlock
+            ]
+        }));
+
+    } catch (error) {
+
+        console.error(
+            "Failed to create block:",
+            error
+        );
+
+    }
+};
 
 // =========================================
 // LISTEN FOR ONLINE USERS
@@ -167,16 +216,13 @@ updateOnlineUsers();
 
         // THIS WAS MISSING
         loadDocument();
-
-       return () => {
+return () => {
 
     if (yjsRef.current) {
 
-        yjsRef.current.awareness.destroy();
+        console.log("CLEANING UP YJS CONNECTION");
 
-        yjsRef.current.socket.close();
-
-        yjsRef.current.ydoc.destroy();
+        yjsRef.current.destroy();
 
         yjsRef.current = null;
     }
@@ -184,6 +230,30 @@ updateOnlineUsers();
 };
 
     }, []);
+    const handleBlockFocus = (blockId) => {
+
+    setActiveUsers((previous) => ({
+        ...previous,
+        [blockId]: currentUser
+    }));
+
+};
+
+const handleBlockBlur = (blockId) => {
+
+    setActiveUsers((previous) => {
+
+        const updated = {
+            ...previous
+        };
+
+        delete updated[blockId];
+
+        return updated;
+
+    });
+
+};
 
     const handleBlockChange = (blockId, content) => {
 
@@ -264,6 +334,45 @@ updateOnlineUsers();
         <div>
 
             <h1>{document.title}</h1>
+            <div
+    style={{
+        display: "flex",
+        gap: "10px",
+        marginBottom: "20px"
+    }}
+>
+    <button
+        onClick={() =>
+            handleAddBlock("paragraph")
+        }
+    >
+        + Paragraph
+    </button>
+
+    <button
+        onClick={() =>
+            handleAddBlock("heading")
+        }
+    >
+        + Heading
+    </button>
+
+    <button
+        onClick={() =>
+            handleAddBlock("code")
+        }
+    >
+        + Code
+    </button>
+
+    <button
+        onClick={() =>
+            handleAddBlock("bullet")
+        }
+    >
+        + Bullet
+    </button>
+</div>
 
             <div
                 style={{
