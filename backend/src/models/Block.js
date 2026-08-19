@@ -9,7 +9,7 @@ const blockSchema = new mongoose.Schema(
                 "paragraph",
                 "heading",
                 "code",
-                "bullet-list",
+                "bullet",
                 "numbered-list",
                 "quote",
                 "list-item"

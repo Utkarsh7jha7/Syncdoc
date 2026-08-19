@@ -151,6 +151,116 @@ connection.awareness.on(
 updateOnlineUsers();
 
                 const { blocks } = connection;
+                // =========================================
+// LISTEN FOR NEW / DELETED BLOCKS
+// =========================================
+
+const handleBlocksChange = (event) => {
+
+    event.changes.keys.forEach(
+        (change, blockId) => {
+
+            // -----------------------------
+            // NEW BLOCK
+            // -----------------------------
+
+            if (change.action === "add") {
+
+                const yBlock =
+                    blocks.get(blockId);
+
+                if (!yBlock) {
+                    return;
+                }
+
+                const newBlock = {
+                    _id: blockId,
+
+                    type:
+                        yBlock.get("type")
+                        || "paragraph",
+
+                    content:
+                        yBlock.get("content")
+                            ?.toString()
+                        || "",
+
+                    level:
+                        yBlock.get("level")
+                        || 0,
+
+                    language:
+                        yBlock.get("language")
+                        || null,
+
+                    children: []
+                };
+
+                console.log(
+                    "NEW REMOTE BLOCK:",
+                    newBlock
+                );
+
+                setDocument(
+                    (previousDocument) => {
+
+                        // Prevent duplicates
+                        const alreadyExists =
+                            previousDocument.blocks.some(
+                                (block) =>
+                                    block._id === blockId
+                            );
+
+                        if (alreadyExists) {
+                            return previousDocument;
+                        }
+
+                        return {
+                            ...previousDocument,
+
+                            blocks: [
+                                ...previousDocument.blocks,
+                                newBlock
+                            ]
+                        };
+
+                    }
+                );
+            }
+
+            // -----------------------------
+            // DELETED BLOCK
+            // -----------------------------
+
+            if (change.action === "delete") {
+
+                console.log(
+                    "REMOTE BLOCK DELETED:",
+                    blockId
+                );
+
+                setDocument(
+                    (previousDocument) => ({
+
+                        ...previousDocument,
+
+                        blocks:
+                            previousDocument.blocks.filter(
+                                (block) =>
+                                    block._id !== blockId
+                            )
+
+                    })
+                );
+            }
+
+        }
+    );
+};
+
+blocks.observe(
+    handleBlocksChange
+);
 
            if (blocks.size === 0) {
 
@@ -218,9 +328,11 @@ updateOnlineUsers();
         loadDocument();
 return () => {
 
-    if (yjsRef.current) {
+    console.log("CLEANING UP YJS CONNECTION");
 
-        console.log("CLEANING UP YJS CONNECTION");
+    blocks.unobserve(handleBlocksChange);
+
+    if (yjsRef.current) {
 
         yjsRef.current.destroy();
 
@@ -253,6 +365,98 @@ const handleBlockBlur = (blockId) => {
 
     });
 
+};
+const handleAddBlock = async (type) => {
+
+    try {
+
+        const blockData = {
+            type,
+            content: "",
+            level: type === "heading" ? 2 : 0,
+            language:
+                type === "code"
+                    ? "javascript"
+                    : null
+        };
+
+        // Create block in MongoDB
+        const data = await createBlock(
+            blockData
+        );
+
+        const newBlock = data.block;
+
+        // -----------------------------------------
+        // Add block to React state
+        // -----------------------------------------
+
+        setDocument((previousDocument) => ({
+            ...previousDocument,
+
+            blocks: [
+                ...previousDocument.blocks,
+                newBlock
+            ]
+        }));
+
+        // -----------------------------------------
+        // Add block to Yjs
+        // -----------------------------------------
+
+        const yjsConnection =
+            yjsRef.current;
+
+        if (yjsConnection) {
+
+            const yBlock = new Y.Map();
+
+            yBlock.set(
+                "type",
+                newBlock.type
+            );
+
+            yBlock.set(
+                "level",
+                newBlock.level || 0
+            );
+
+            yBlock.set(
+                "language",
+                newBlock.language || null
+            );
+
+            const yText = new Y.Text();
+
+            yText.insert(
+                0,
+                newBlock.content || ""
+            );
+
+            yBlock.set(
+                "content",
+                yText
+            );
+
+            yjsConnection.blocks.set(
+                newBlock._id,
+                yBlock
+            );
+
+            console.log(
+                "NEW BLOCK ADDED TO YJS:",
+                newBlock._id
+            );
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Failed to create block:",
+            error
+        );
+
+    }
 };
 
     const handleBlockChange = (blockId, content) => {
