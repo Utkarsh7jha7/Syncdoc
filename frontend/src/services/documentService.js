@@ -178,3 +178,26 @@ export const deleteDocument = async (
 
     return response.json();
 };
+// =========================================
+// DELETE BLOCK
+// =========================================
+
+export const deleteBlock = async (blockId) => {
+
+    const response = await fetch(
+        `http://localhost:5000/api/blocks/${blockId}`,
+        {
+            method: "DELETE"
+        }
+    );
+
+    if (!response.ok) {
+
+        throw new Error(
+            "Failed to delete block"
+        );
+
+    }
+
+    return response.json();
+};

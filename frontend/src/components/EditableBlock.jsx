@@ -5,7 +5,8 @@ function EditableBlock({
     yBlock,
     onChange,
     onFocus,
-    onBlur
+    onBlur,
+    onDelete
 }) {
 
     const yText = yBlock?.get("content");
@@ -73,7 +74,9 @@ function EditableBlock({
                 oldContent[start] ===
                     newContent[start]
             ) {
+
                 start++;
+
             }
 
             let oldEnd =
@@ -88,8 +91,10 @@ function EditableBlock({
                 oldContent[oldEnd - 1] ===
                     newContent[newEnd - 1]
             ) {
+
                 oldEnd--;
                 newEnd--;
+
             }
 
             const deleteLength =
@@ -125,6 +130,7 @@ function EditableBlock({
 
         }
 
+        // Save to MongoDB
         onChange(
             block._id,
             newContent
@@ -137,27 +143,63 @@ function EditableBlock({
     // =========================================
 
     const commonProps = {
+
         value: content,
 
         onChange: handleChange,
 
         onFocus: () => {
+
             onFocus(block._id);
+
         },
 
         onBlur: () => {
+
             onBlur(block._id);
+
         },
 
         style: {
+
             width: "100%",
+
             padding: "10px",
+
             color: "white",
+
             borderRadius: "8px",
+
             resize: "vertical",
+
             outline: "none"
+
         }
+
     };
+
+    // =========================================
+    // DELETE BUTTON
+    // =========================================
+
+    const deleteButton = (
+
+        <button
+            onClick={() => onDelete(block._id)}
+            style={{
+                marginBottom: "5px",
+                padding: "5px 10px",
+                background: "#dc2626",
+                color: "white",
+                border: "none",
+                borderRadius: "5px",
+                cursor: "pointer"
+            }}
+        >
+            Delete
+        </button>
+
+    );
 
     // =========================================
     // HEADING
@@ -166,15 +208,20 @@ function EditableBlock({
     if (block.type === "heading") {
 
         return (
+
             <div
                 style={{
                     marginBottom: "15px"
                 }}
             >
 
+                {deleteButton}
+
                 <textarea
                     {...commonProps}
+
                     rows={1}
+
                     style={{
                         ...commonProps.style,
 
@@ -195,6 +242,7 @@ function EditableBlock({
                 />
 
             </div>
+
         );
     }
 
@@ -205,16 +253,22 @@ function EditableBlock({
     if (block.type === "code") {
 
         return (
+
             <div
                 style={{
                     marginBottom: "15px"
                 }}
             >
 
+                {deleteButton}
+
                 <textarea
                     {...commonProps}
+
                     rows={6}
+
                     spellCheck={false}
+
                     style={{
                         ...commonProps.style,
 
@@ -233,6 +287,7 @@ function EditableBlock({
                 />
 
             </div>
+
         );
     }
 
@@ -243,39 +298,53 @@ function EditableBlock({
     if (block.type === "bullet") {
 
         return (
+
             <div
                 style={{
-                    display: "flex",
-                    alignItems: "flex-start",
                     marginBottom: "10px"
                 }}
             >
 
-                <span
+                {deleteButton}
+
+                <div
                     style={{
-                        color: "white",
-                        fontSize: "20px",
-                        marginRight: "10px"
+                        display: "flex",
+                        alignItems:
+                            "flex-start"
                     }}
                 >
-                    •
-                </span>
 
-                <textarea
-                    {...commonProps}
-                    rows={1}
-                    style={{
-                        ...commonProps.style,
+                    <span
+                        style={{
+                            color: "white",
+                            fontSize: "20px",
+                            marginRight: "10px"
+                        }}
+                    >
+                        •
+                    </span>
 
-                        background:
-                            "#151C2C",
+                    <textarea
+                        {...commonProps}
 
-                        border:
-                            "1px solid #374151"
-                    }}
-                />
+                        rows={1}
+
+                        style={{
+                            ...commonProps.style,
+
+                            background:
+                                "#151C2C",
+
+                            border:
+                                "1px solid #374151"
+                        }}
+                    />
+
+                </div>
 
             </div>
+
         );
     }
 
@@ -284,15 +353,20 @@ function EditableBlock({
     // =========================================
 
     return (
+
         <div
             style={{
                 marginBottom: "15px"
             }}
         >
 
+            {deleteButton}
+
             <textarea
                 {...commonProps}
+
                 rows={3}
+
                 style={{
                     ...commonProps.style,
 
@@ -306,6 +380,7 @@ function EditableBlock({
             />
 
         </div>
+
     );
 }
 
