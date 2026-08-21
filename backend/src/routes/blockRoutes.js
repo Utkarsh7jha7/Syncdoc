@@ -2,11 +2,32 @@ import express from "express";
 
 import {
     createBlock,
-    updateBlock
+    updateBlock,
+    deleteBlock
 } from "../controllers/blockController.js";
+
 const router = express.Router();
 
-router.post("/", createBlock);
-router.put("/:id", updateBlock);
+
+// CREATE BLOCK
+router.post(
+    "/",
+    createBlock
+);
+
+
+// UPDATE BLOCK
+router.put(
+    "/:blockId",
+    updateBlock
+);
+
+
+// DELETE BLOCK
+router.delete(
+    "/:blockId",
+    deleteBlock
+);
+
 
 export default router;

@@ -1,24 +1,43 @@
-const API_URL = "http://localhost:5000/api/documents";
+const API_URL =
+    "http://localhost:5000/api/documents";
+
+const BLOCK_API_URL =
+    "http://localhost:5000/api/blocks";
+
 
 // =========================================
 // GET SINGLE DOCUMENT
 // =========================================
 
-export const getDocument = async (documentId) => {
+export const getDocument = async (
+    documentId
+) => {
 
     const response = await fetch(
         `${API_URL}/${documentId}`
     );
 
+    const data =
+        await response.json().catch(
+            () => null
+        );
+
     if (!response.ok) {
 
+        console.error(
+            "GET DOCUMENT FAILED:",
+            response.status,
+            data
+        );
+
         throw new Error(
-            "Failed to fetch document"
+            data?.message ||
+            `Failed to fetch document (${response.status})`
         );
 
     }
 
-    return response.json();
+    return data;
 };
 
 
@@ -32,15 +51,27 @@ export const getDocuments = async () => {
         API_URL
     );
 
+    const data =
+        await response.json().catch(
+            () => null
+        );
+
     if (!response.ok) {
 
+        console.error(
+            "GET DOCUMENTS FAILED:",
+            response.status,
+            data
+        );
+
         throw new Error(
-            "Failed to fetch documents"
+            data?.message ||
+            `Failed to fetch documents (${response.status})`
         );
 
     }
 
-    return response.json();
+    return data;
 };
 
 
@@ -68,15 +99,27 @@ export const createDocument = async (
         }
     );
 
+    const data =
+        await response.json().catch(
+            () => null
+        );
+
     if (!response.ok) {
 
+        console.error(
+            "CREATE DOCUMENT FAILED:",
+            response.status,
+            data
+        );
+
         throw new Error(
-            "Failed to create document"
+            data?.message ||
+            `Failed to create document (${response.status})`
         );
 
     }
 
-    return response.json();
+    return data;
 };
 
 
@@ -89,7 +132,7 @@ export const createBlock = async (
 ) => {
 
     const response = await fetch(
-        "http://localhost:5000/api/blocks",
+        BLOCK_API_URL,
         {
             method: "POST",
 
@@ -104,15 +147,27 @@ export const createBlock = async (
         }
     );
 
+    const data =
+        await response.json().catch(
+            () => null
+        );
+
     if (!response.ok) {
 
+        console.error(
+            "CREATE BLOCK FAILED:",
+            response.status,
+            data
+        );
+
         throw new Error(
-            "Failed to create block"
+            data?.message ||
+            `Failed to create block (${response.status})`
         );
 
     }
 
-    return response.json();
+    return data;
 };
 
 
@@ -126,7 +181,7 @@ export const updateBlock = async (
 ) => {
 
     const response = await fetch(
-        `http://localhost:5000/api/blocks/${blockId}`,
+        `${BLOCK_API_URL}/${blockId}`,
         {
             method: "PUT",
 
@@ -141,15 +196,83 @@ export const updateBlock = async (
         }
     );
 
+    const data =
+        await response.json().catch(
+            () => null
+        );
+
     if (!response.ok) {
 
+        console.error(
+            "UPDATE BLOCK FAILED:",
+            response.status,
+            data
+        );
+
         throw new Error(
-            "Failed to update block"
+            data?.message ||
+            `Failed to update block (${response.status})`
         );
 
     }
 
-    return response.json();
+    return data;
+};
+
+
+// =========================================
+// DELETE BLOCK
+// =========================================
+
+export const deleteBlock = async (
+    blockId
+) => {
+
+    console.log(
+        "DELETING BLOCK:",
+        blockId
+    );
+
+    const response = await fetch(
+        `${BLOCK_API_URL}/${blockId}`,
+        {
+            method: "DELETE"
+        }
+    );
+
+    const data =
+        await response.json().catch(
+            () => null
+        );
+
+
+    if (!response.ok) {
+
+        console.error(
+            "DELETE BLOCK FAILED:",
+            {
+                status: response.status,
+                statusText:
+                    response.statusText,
+                data
+            }
+        );
+
+        throw new Error(
+            data?.message ||
+            `Failed to delete block (${response.status})`
+        );
+
+    }
+
+
+    console.log(
+        "BLOCK DELETED SUCCESSFULLY:",
+        data
+    );
+
+
+    return data;
 };
 
 
@@ -168,36 +291,25 @@ export const deleteDocument = async (
         }
     );
 
+    const data =
+        await response.json().catch(
+            () => null
+        );
+
     if (!response.ok) {
 
+        console.error(
+            "DELETE DOCUMENT FAILED:",
+            response.status,
+            data
+        );
+
         throw new Error(
-            "Failed to delete document"
+            data?.message ||
+            `Failed to delete document (${response.status})`
         );
 
     }
 
-    return response.json();
-};
-// =========================================
-// DELETE BLOCK
-// =========================================
-
-export const deleteBlock = async (blockId) => {
-
-    const response = await fetch(
-        `http://localhost:5000/api/blocks/${blockId}`,
-        {
-            method: "DELETE"
-        }
-    );
-
-    if (!response.ok) {
-
-        throw new Error(
-            "Failed to delete block"
-        );
-
-    }
-
-    return response.json();
+    return data;
 };
