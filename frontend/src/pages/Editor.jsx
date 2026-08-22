@@ -167,50 +167,67 @@ function Editor() {
                 // ONLINE USERS
                 // =================================
 
-                const updateOnlineUsers = () => {
+const updateOnlineUsers = () => {
 
-                    const states =
-                        Array.from(
-                            awareness
-                                .getStates()
-                                .values()
-                        );
+    const states =
+        Array.from(
+            connection.awareness
+                .getStates()
+                .values()
+        );
 
+    const users = states
+        .map((state) => {
 
-                    const users =
-                        states
-                            .map(
-                                (state) =>
-                                    state.user
-                            )
-                            .filter(Boolean);
+            if (!state.user) {
+                return null;
+            }
 
+            return {
+                name: state.user.name,
+                editingBlock:
+                    state.editingBlock || null
+            };
 
-                    // Remove duplicate user names
-                    const uniqueUsers =
-                        Array.from(
-                            new Map(
-                                users.map(
-                                    (user) => [
-                                        user.name,
-                                        user
-                                    ]
-                                )
-                            ).values()
-                        );
+        })
+        .filter(Boolean);
 
+    console.log(
+        "ONLINE USERS:",
+        users
+    );
 
-                    console.log(
-                        "ONLINE USERS:",
-                        uniqueUsers
-                    );
+    setOnlineUsers(users);
 
+    // -------------------------------
+    // Build editing users
+    // -------------------------------
 
-                    setOnlineUsers(
-                        uniqueUsers
-                    );
+    const editing = {};
 
-                };
+    users.forEach((user) => {
+
+        if (!user.editingBlock) {
+            return;
+        }
+
+        if (!editing[user.editingBlock]) {
+            editing[user.editingBlock] = [];
+        }
+
+        editing[user.editingBlock].push(
+            user.name
+        );
+
+    });
+
+    console.log(
+        "ACTIVE EDITING USERS:",
+        editing
+    );
+
+    setActiveUsers(editing);
+};
 
 
                 awareness.on(
@@ -777,49 +794,44 @@ function Editor() {
     // BLOCK FOCUS
     // =========================================
 
-    const handleBlockFocus =
-        (blockId) => {
+const handleBlockFocus = (blockId) => {
 
-            setActiveUsers(
-                (previous) => ({
+    const connection = yjsRef.current;
 
-                    ...previous,
+    if (!connection) {
+        return;
+    }
 
-                    [blockId]:
-                        currentUser
+    console.log(
+        `${currentUser} started editing block:`,
+        blockId
+    );
 
-                })
-            );
-
-        };
-
-
-    // =========================================
-    // BLOCK BLUR
-    // =========================================
-
-    const handleBlockBlur =
-        (blockId) => {
-
-            setActiveUsers(
-                (previous) => {
-
-                    const updated = {
-                        ...previous
-                    };
+    connection.awareness.setLocalStateField(
+        "editingBlock",
+        blockId
+    );
+};
 
 
-                    delete updated[
-                        blockId
-                    ];
+const handleBlockBlur = (blockId) => {
 
+    const connection = yjsRef.current;
 
-                    return updated;
+    if (!connection) {
+        return;
+    }
 
-                }
-            );
+    console.log(
+        `${currentUser} stopped editing block:`,
+        blockId
+    );
 
-        };
+    connection.awareness.setLocalStateField(
+        "editingBlock",
+        null
+    );
+};
 
 
     // =========================================
@@ -1147,35 +1159,18 @@ function Editor() {
 
                     return (
 
-                        <EditableBlock
-                            key={
-                                block._id
-                            }
-
-                            block={
-                                block
-                            }
-
-                            yBlock={
-                                yBlock
-                            }
-
-                            onChange={
-                                handleBlockChange
-                            }
-
-                            onFocus={
-                                handleBlockFocus
-                            }
-
-                            onBlur={
-                                handleBlockBlur
-                            }
-
-                            onDelete={
-                                handleDeleteBlock
-                            }
-                        />
+<EditableBlock
+    key={block._id}
+    block={block}
+    yBlock={yBlock}
+    onChange={handleBlockChange}
+    onFocus={handleBlockFocus}
+    onBlur={handleBlockBlur}
+    onDelete={handleDeleteBlock}
+    editingUsers={
+        activeUsers[block._id] || []
+    }
+/>
 
                     );
 

@@ -6,7 +6,8 @@ function EditableBlock({
     onChange,
     onFocus,
     onBlur,
-    onDelete
+    onDelete,
+    editingUsers = []
 }) {
 
     const yText = yBlock?.get("content");
@@ -36,9 +37,7 @@ function EditableBlock({
 
         };
 
-        yText.observe(
-            handleYjsChange
-        );
+        yText.observe(handleYjsChange);
 
         return () => {
 
@@ -139,6 +138,44 @@ function EditableBlock({
     };
 
     // =========================================
+    // EDITING USER INDICATOR
+    // =========================================
+
+    const editingIndicator =
+        editingUsers.length > 0 ? (
+
+            <div
+                style={{
+                    marginBottom: "6px",
+                    padding: "5px 10px",
+                    color: "#60a5fa",
+                    fontSize: "13px",
+                    fontWeight: "500",
+                    background: "#111827",
+                    borderRadius: "6px",
+                    width: "fit-content"
+                }}
+            >
+
+                ✏️{" "}
+
+                {editingUsers
+                    .map(
+                        (user) => user.name
+                    )
+                    .join(", ")}
+
+                {" "}
+
+                {editingUsers.length === 1
+                    ? "is editing this block"
+                    : "are editing this block"}
+
+            </div>
+
+        ) : null;
+
+    // =========================================
     // COMMON TEXTAREA PROPERTIES
     // =========================================
 
@@ -185,7 +222,10 @@ function EditableBlock({
     const deleteButton = (
 
         <button
-            onClick={() => onDelete(block._id)}
+            onClick={() =>
+                onDelete(block._id)
+            }
+
             style={{
                 marginBottom: "5px",
                 padding: "5px 10px",
@@ -214,6 +254,8 @@ function EditableBlock({
                     marginBottom: "15px"
                 }}
             >
+
+                {editingIndicator}
 
                 {deleteButton}
 
@@ -244,6 +286,7 @@ function EditableBlock({
             </div>
 
         );
+
     }
 
     // =========================================
@@ -259,6 +302,8 @@ function EditableBlock({
                     marginBottom: "15px"
                 }}
             >
+
+                {editingIndicator}
 
                 {deleteButton}
 
@@ -289,6 +334,7 @@ function EditableBlock({
             </div>
 
         );
+
     }
 
     // =========================================
@@ -304,6 +350,8 @@ function EditableBlock({
                     marginBottom: "10px"
                 }}
             >
+
+                {editingIndicator}
 
                 {deleteButton}
 
@@ -346,6 +394,7 @@ function EditableBlock({
             </div>
 
         );
+
     }
 
     // =========================================
@@ -359,6 +408,8 @@ function EditableBlock({
                 marginBottom: "15px"
             }}
         >
+
+            {editingIndicator}
 
             {deleteButton}
 

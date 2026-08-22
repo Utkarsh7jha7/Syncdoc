@@ -8,66 +8,84 @@ export const createYjsConnection = (
 
     const ydoc = new Y.Doc();
 
-    const blocks = ydoc.getMap("blocks");
+    const blocks =
+        ydoc.getMap("blocks");
 
     // =========================================
     // AWARENESS
     // =========================================
 
     const awareness =
-        new awarenessProtocol.Awareness(ydoc);
+        new awarenessProtocol.Awareness(
+            ydoc
+        );
 
-    awareness.setLocalStateField("user", {
-        name: currentUser
+    awareness.setLocalState({
+        user: {
+            name: currentUser
+        },
+
+        editingBlock: null
     });
 
     // =========================================
     // WEBSOCKET
     // =========================================
 
-    const socket = new WebSocket(
-        `ws://localhost:5000?documentId=${documentId}`
-    );
+    const socket =
+        new WebSocket(
+            `ws://localhost:5000?documentId=${documentId}`
+        );
 
-    socket.binaryType = "arraybuffer";
+    socket.binaryType =
+        "arraybuffer";
 
     let connected = false;
 
     const pendingMessages = [];
 
     // =========================================
-    // YJS DOCUMENT UPDATE
+    // YJS UPDATE
     // =========================================
 
-    ydoc.on("update", (update, origin) => {
+    ydoc.on(
+        "update",
+        (update, origin) => {
 
-        if (origin === "remote") {
-            return;
+            if (origin === "remote") {
+                return;
+            }
+
+            const message =
+                new Uint8Array(
+                    update.length + 1
+                );
+
+            message[0] = 0;
+
+            message.set(
+                update,
+                1
+            );
+
+            if (
+                connected &&
+                socket.readyState ===
+                    WebSocket.OPEN
+            ) {
+
+                socket.send(message);
+
+            } else {
+
+                pendingMessages.push(
+                    message
+                );
+
+            }
+
         }
-
-        const message = new Uint8Array(
-            update.length + 1
-        );
-
-        // 0 = Yjs update
-        message[0] = 0;
-
-        message.set(update, 1);
-
-        if (
-            connected &&
-            socket.readyState === WebSocket.OPEN
-        ) {
-
-            socket.send(message);
-
-        } else {
-
-            pendingMessages.push(message);
-
-        }
-
-    });
+    );
 
     // =========================================
     // AWARENESS UPDATE
@@ -75,7 +93,11 @@ export const createYjsConnection = (
 
     awareness.on(
         "update",
-        ({ added, updated, removed }) => {
+        ({
+            added,
+            updated,
+            removed
+        }) => {
 
             const clients = [
                 ...added,
@@ -83,28 +105,37 @@ export const createYjsConnection = (
                 ...removed
             ];
 
-            if (clients.length === 0) {
+            if (
+                clients.length === 0
+            ) {
+
                 return;
+
             }
 
             const update =
-                awarenessProtocol.encodeAwarenessUpdate(
-                    awareness,
-                    clients
+                awarenessProtocol
+                    .encodeAwarenessUpdate(
+                        awareness,
+                        clients
+                    );
+
+            const message =
+                new Uint8Array(
+                    update.length + 1
                 );
 
-            const message = new Uint8Array(
-                update.length + 1
-            );
-
-            // 1 = Awareness update
             message[0] = 1;
 
-            message.set(update, 1);
+            message.set(
+                update,
+                1
+            );
 
             if (
                 connected &&
-                socket.readyState === WebSocket.OPEN
+                socket.readyState ===
+                    WebSocket.OPEN
             ) {
 
                 socket.send(message);
@@ -118,18 +149,28 @@ export const createYjsConnection = (
     // RECEIVE MESSAGE
     // =========================================
 
-    socket.onmessage = (event) => {
+    socket.onmessage = (
+        event
+    ) => {
 
         const message =
-            new Uint8Array(event.data);
+            new Uint8Array(
+                event.data
+            );
 
-        if (message.length === 0) {
+        if (
+            message.length === 0
+        ) {
+
             return;
+
         }
 
-        const type = message[0];
+        const type =
+            message[0];
 
-        const data = message.slice(1);
+        const data =
+            message.slice(1);
 
         // =====================================
         // YJS UPDATE
@@ -149,13 +190,14 @@ export const createYjsConnection = (
         // AWARENESS UPDATE
         // =====================================
 
-        else if (type === 1) {
+        if (type === 1) {
 
-            awarenessProtocol.applyAwarenessUpdate(
-                awareness,
-                data,
-                "remote"
-            );
+            awarenessProtocol
+                .applyAwarenessUpdate(
+                    awareness,
+                    data,
+                    "remote"
+                );
 
         }
 
@@ -173,7 +215,6 @@ export const createYjsConnection = (
             "CONNECTED TO COLLABORATION SERVER"
         );
 
-        // Send queued Yjs updates
         while (
             pendingMessages.length > 0
         ) {
@@ -185,31 +226,34 @@ export const createYjsConnection = (
 
         }
 
-        // Send our awareness state
+        // Send initial awareness
         const awarenessUpdate =
-            awarenessProtocol.encodeAwarenessUpdate(
-                awareness,
-                [awareness.clientID]
-            );
+            awarenessProtocol
+                .encodeAwarenessUpdate(
+                    awareness,
+                    [
+                        awareness.clientID
+                    ]
+                );
 
-        const awarenessMessage =
+        const message =
             new Uint8Array(
                 awarenessUpdate.length + 1
             );
 
-        awarenessMessage[0] = 1;
+        message[0] = 1;
 
-        awarenessMessage.set(
+        message.set(
             awarenessUpdate,
             1
         );
 
-        socket.send(awarenessMessage);
+        socket.send(message);
 
     };
 
     // =========================================
-    // CLOSE CONNECTION
+    // DISCONNECT
     // =========================================
 
     const destroy = () => {
@@ -218,37 +262,21 @@ export const createYjsConnection = (
             "DESTROYING YJS CONNECTION"
         );
 
-        connected = false;
+        // Clear our awareness state
+        awareness.setLocalState(null);
 
-        // Remove our awareness state
-        awarenessProtocol.removeAwarenessStates(
-            awareness,
-            [awareness.clientID],
-            "local"
-        );
-
-        // Close WebSocket
         if (
-            socket.readyState === WebSocket.OPEN ||
-            socket.readyState === WebSocket.CONNECTING
+            socket.readyState ===
+            WebSocket.OPEN
         ) {
 
             socket.close();
 
         }
 
-        // Destroy Yjs document
         ydoc.destroy();
 
-        console.log(
-            "YJS CONNECTION DESTROYED"
-        );
-
     };
-
-    // =========================================
-    // CLOSED
-    // =========================================
 
     socket.onclose = () => {
 
@@ -260,11 +288,9 @@ export const createYjsConnection = (
 
     };
 
-    // =========================================
-    // ERROR
-    // =========================================
-
-    socket.onerror = (error) => {
+    socket.onerror = (
+        error
+    ) => {
 
         console.error(
             "WEBSOCKET ERROR:",
@@ -280,4 +306,5 @@ export const createYjsConnection = (
         awareness,
         destroy
     };
+
 };

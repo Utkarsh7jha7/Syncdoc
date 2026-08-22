@@ -1,5 +1,6 @@
 import { WebSocketServer } from "ws";
 import * as Y from "yjs";
+import * as awarenessProtocol from "y-protocols/awareness";
 
 const documents = new Map();
 
@@ -27,45 +28,98 @@ export const setupYjsServer = (server) => {
         }
 
         // =========================================
-        // CREATE DOCUMENT
+        // CREATE DOCUMENT STATE
         // =========================================
 
         if (!documents.has(documentId)) {
 
+            const ydoc = new Y.Doc();
+
+            const awareness =
+                new awarenessProtocol.Awareness(
+                    ydoc
+                );
+
             documents.set(
                 documentId,
-                new Y.Doc()
+                {
+                    ydoc,
+                    awareness,
+                    clients: new Set()
+                }
             );
 
         }
 
-        const ydoc =
+        const documentState =
             documents.get(documentId);
 
+        const {
+            ydoc,
+            awareness,
+            clients
+        } = documentState;
+
+        clients.add(ws);
+
         console.log(
-            `Client connected: ${documentId}`
+            `Client connected to document: ${documentId}`
         );
 
         // =========================================
-        // SEND INITIAL DOCUMENT STATE
+        // SEND CURRENT YJS DOCUMENT
         // =========================================
 
         const initialUpdate =
             Y.encodeStateAsUpdate(ydoc);
 
-        const initialMessage =
+        const yjsMessage =
             new Uint8Array(
                 initialUpdate.length + 1
             );
 
-        initialMessage[0] = 0;
+        yjsMessage[0] = 0;
 
-        initialMessage.set(
+        yjsMessage.set(
             initialUpdate,
             1
         );
 
-        ws.send(initialMessage);
+        ws.send(yjsMessage);
+
+        // =========================================
+        // SEND EXISTING AWARENESS USERS
+        // =========================================
+
+        const awarenessStates =
+            Array.from(
+                awareness.getStates().keys()
+            );
+
+        if (awarenessStates.length > 0) {
+
+            const awarenessUpdate =
+                awarenessProtocol
+                    .encodeAwarenessUpdate(
+                        awareness,
+                        awarenessStates
+                    );
+
+            const awarenessMessage =
+                new Uint8Array(
+                    awarenessUpdate.length + 1
+                );
+
+            awarenessMessage[0] = 1;
+
+            awarenessMessage.set(
+                awarenessUpdate,
+                1
+            );
+
+            ws.send(awarenessMessage);
+
+        }
 
         // =========================================
         // RECEIVE MESSAGE
@@ -87,18 +141,30 @@ export const setupYjsServer = (server) => {
                 data.slice(1);
 
             // =====================================
-            // YJS DOCUMENT UPDATE
+            // YJS UPDATE
             // =====================================
 
             if (messageType === 0) {
 
-                console.log(
-                    "SERVER: YJS UPDATE"
-                );
-
                 Y.applyUpdate(
                     ydoc,
-                    payload
+                    payload,
+                    "remote"
+                );
+
+                clients.forEach(
+                    (client) => {
+
+                        if (
+                            client !== ws &&
+                            client.readyState === 1
+                        ) {
+
+                            client.send(data);
+
+                        }
+
+                    }
                 );
 
             }
@@ -107,44 +173,80 @@ export const setupYjsServer = (server) => {
             // AWARENESS UPDATE
             // =====================================
 
-            else if (messageType === 1) {
+            if (messageType === 1) {
 
-                console.log(
-                    "SERVER: AWARENESS UPDATE"
-                );
+                try {
 
-            }
+                    awarenessProtocol
+                        .applyAwarenessUpdate(
+                            awareness,
+                            payload,
+                            ws
+                        );
 
-            // =====================================
-            // BROADCAST
-            // =====================================
+                    clients.forEach(
+                        (client) => {
 
-            wss.clients.forEach(
-                (client) => {
+                            if (
+                                client !== ws &&
+                                client.readyState === 1
+                            ) {
 
-                    if (
-                        client !== ws &&
-                        client.readyState === 1
-                    ) {
+                                client.send(data);
 
-                        client.send(data);
+                            }
 
-                    }
+                        }
+                    );
+
+                    console.log(
+                        "AWARENESS UPDATE:",
+                        Array.from(
+                            awareness
+                                .getStates()
+                                .values()
+                        )
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        "AWARENESS ERROR:",
+                        error
+                    );
 
                 }
-            );
+
+            }
 
         });
 
         // =========================================
-        // DISCONNECT
+        // CLIENT DISCONNECTED
         // =========================================
 
         ws.on("close", () => {
 
+            clients.delete(ws);
+
             console.log(
-                `Client disconnected: ${documentId}`
+                `Client disconnected from document: ${documentId}`
             );
+
+            // Remove awareness states belonging
+            // to disconnected clients where possible.
+
+            if (clients.size === 0) {
+
+                documents.delete(
+                    documentId
+                );
+
+                console.log(
+                    `Removed document state: ${documentId}`
+                );
+
+            }
 
         });
 
