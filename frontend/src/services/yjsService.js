@@ -299,12 +299,14 @@ export const createYjsConnection = (
 
     };
 
-    return {
-        ydoc,
-        blocks,
-        socket,
-        awareness,
-        destroy
-    };
+    const undoManager = new Y.UndoManager(blocks);
+
+return {
+    ydoc,
+    blocks,
+    socket,
+    awareness,
+    undoManager
+};
 
 };

@@ -81,9 +81,7 @@ function Editor() {
             "USE EFFECT IS RUNNING"
         );
 
-
         let connection = null;
-
 
         const loadDocument = async () => {
 
@@ -91,43 +89,38 @@ function Editor() {
                 "LOAD DOCUMENT FUNCTION STARTED"
             );
 
-
             try {
 
-                // ---------------------------------
-                // GET DOCUMENT FROM MONGODB
-                // ---------------------------------
+                // =================================
+                // GET DOCUMENT
+                // =================================
 
                 console.log(
                     "CALLING API..."
                 );
-
 
                 const data =
                     await getDocument(
                         DOCUMENT_ID
                     );
 
-
                 console.log(
                     "API RESPONSE:",
                     data
                 );
 
-
                 setDocument(
                     data.document
                 );
-
 
                 console.log(
                     "DOCUMENT SET"
                 );
 
 
-                // ---------------------------------
+                // =================================
                 // CREATE YJS CONNECTION
-                // ---------------------------------
+                // =================================
 
                 connection =
                     createYjsConnection(
@@ -135,11 +128,9 @@ function Editor() {
                         currentUser
                     );
 
-
                 console.log(
                     "YJS CONNECTION CREATED"
                 );
-
 
                 yjsRef.current =
                     connection;
@@ -149,7 +140,6 @@ function Editor() {
                     "CURRENT USER:",
                     currentUser
                 );
-
 
                 console.log(
                     "AWARENESS STATE:",
@@ -163,72 +153,108 @@ function Editor() {
                 } = connection;
 
 
-                // =================================
-                // ONLINE USERS
-                // =================================
+                // =========================================
+                // UPDATE ONLINE USERS
+                // =========================================
 
-const updateOnlineUsers = () => {
+                const updateOnlineUsers = () => {
 
-    const states =
-        Array.from(
-            connection.awareness
-                .getStates()
-                .values()
-        );
+                    const states =
+                        Array.from(
+                            awareness
+                                .getStates()
+                                .values()
+                        );
 
-    const users = states
-        .map((state) => {
 
-            if (!state.user) {
-                return null;
-            }
+                    const users =
+                        states
+                            .map((state) => {
 
-            return {
-                name: state.user.name,
-                editingBlock:
-                    state.editingBlock || null
-            };
+                                if (!state.user) {
+                                    return null;
+                                }
 
-        })
-        .filter(Boolean);
+                                return {
+                                    name:
+                                        state.user.name,
 
-    console.log(
-        "ONLINE USERS:",
-        users
-    );
+                                    editingBlock:
+                                        state.editingBlock ||
+                                        null
+                                };
 
-    setOnlineUsers(users);
+                            })
+                            .filter(Boolean);
 
-    // -------------------------------
-    // Build editing users
-    // -------------------------------
 
-    const editing = {};
+                    console.log(
+                        "ONLINE USERS:",
+                        users
+                    );
 
-    users.forEach((user) => {
 
-        if (!user.editingBlock) {
-            return;
-        }
+                    setOnlineUsers(
+                        users
+                    );
 
-        if (!editing[user.editingBlock]) {
-            editing[user.editingBlock] = [];
-        }
 
-        editing[user.editingBlock].push(
-            user.name
-        );
+                    // =====================================
+                    // BUILD ACTIVE EDITING USERS
+                    // =====================================
 
-    });
+                    const editing = {};
 
-    console.log(
-        "ACTIVE EDITING USERS:",
-        editing
-    );
 
-    setActiveUsers(editing);
-};
+                    users.forEach((user) => {
 
+                        if (
+                            !user.editingBlock
+                        ) {
+                            return;
+                        }
+
+
+                        if (
+                            !editing[
+                            user.editingBlock
+                            ]
+                        ) {
+
+                            editing[
+                                user.editingBlock
+                            ] = [];
+
+                        }
+
+
+                        // IMPORTANT:
+                        // Store object instead of string
+                        editing[
+                            user.editingBlock
+                        ].push({
+                            name: user.name
+                        });
+
+                    });
+
+
+                    console.log(
+                        "ACTIVE EDITING USERS:",
+                        editing
+                    );
+
+
+                    setActiveUsers(
+                        editing
+                    );
+
+                };
+
+
+                // =========================================
+                // AWARENESS LISTENER
+                // =========================================
 
                 awareness.on(
                     "change",
@@ -236,602 +262,605 @@ const updateOnlineUsers = () => {
                 );
 
 
-                // Get current users immediately
+                // Get initial users
                 updateOnlineUsers();
+                // =========================================
+                // UNDO
+                // =========================================
+
+                const handleUndo = () => {
+
+                    const connection = yjsRef.current;
+
+                    if (!connection) {
+                        return;
+                    }
+
+                    connection.undoManager.undo();
+
+                };
 
 
-                // =================================
-                // YJS BLOCK CHANGES
-                // =================================
+                // =========================================
+                // REDO
+                // =========================================
 
-                const handleBlocksChange =
-                    (event) => {
+                const handleRedo = () => {
 
-                        event.changes.keys.forEach(
-                            (
-                                change,
-                                blockId
-                            ) => {
+                    const connection = yjsRef.current;
 
+                    if (!connection) {
+                        return;
+                    }
 
-                                // -------------------------
-                                // NEW BLOCK
-                                // -------------------------
+                    connection.undoManager.redo();
 
-                                if (
-                                    change.action ===
-                                    "add"
-                                ) {
-
-                                    const yBlock =
-                                        blocks.get(
-                                            blockId
-                                        );
+                };
 
 
-                                    if (!yBlock) {
-                                        return;
-                                    }
+                // =========================================
+                // BLOCK CONTENT CHANGE
+                // =========================================
+
+                const handleBlockChange =
+                    (blockId, content, isRemote = false) => {
 
 
-                                    const newBlock = {
+                        // =========================================
+                        // YJS BLOCK CHANGES
+                        // =========================================
 
-                                        _id:
-                                            blockId,
+                        const handleBlocksChange =
+                            (event) => {
 
-                                        type:
-                                            yBlock.get(
-                                                "type"
-                                            ) ||
-                                            "paragraph",
-
-                                        content:
-                                            yBlock
-                                                .get(
-                                                    "content"
-                                                )
-                                                ?.toString() ||
-                                            "",
-
-                                        level:
-                                            yBlock.get(
-                                                "level"
-                                            ) ||
-                                            0,
-
-                                        language:
-                                            yBlock.get(
-                                                "language"
-                                            ) ||
-                                            null,
-
-                                        children: []
-
-                                    };
-
-
-                                    console.log(
-                                        "NEW REMOTE BLOCK:",
-                                        newBlock
-                                    );
-
-
-                                    setDocument(
-                                        (
-                                            previousDocument
-                                        ) => {
-
-                                            if (
-                                                !previousDocument
-                                            ) {
-                                                return previousDocument;
-                                            }
-
-
-                                            // Prevent duplicate
-                                            const alreadyExists =
-                                                previousDocument
-                                                    .blocks
-                                                    .some(
-                                                        (
-                                                            block
-                                                        ) =>
-                                                            block._id ===
-                                                            blockId
-                                                    );
-
-
-                                            if (
-                                                alreadyExists
-                                            ) {
-                                                return previousDocument;
-                                            }
-
-
-                                            return {
-
-                                                ...previousDocument,
-
-                                                blocks: [
-                                                    ...previousDocument.blocks,
-                                                    newBlock
-                                                ]
-
-                                            };
-
-                                        }
-                                    );
-
-                                }
-
-
-                                // -------------------------
-                                // DELETE BLOCK
-                                // -------------------------
-
-                                if (
-                                    change.action ===
-                                    "delete"
-                                ) {
-
-                                    console.log(
-                                        "REMOTE BLOCK DELETED:",
+                                event.changes.keys.forEach(
+                                    (
+                                        change,
                                         blockId
-                                    );
+                                    ) => {
 
 
-                                    setDocument(
-                                        (
-                                            previousDocument
-                                        ) => {
+                                        // =================================
+                                        // NEW BLOCK
+                                        // =================================
 
-                                            if (
-                                                !previousDocument
-                                            ) {
-                                                return previousDocument;
+                                        if (
+                                            change.action ===
+                                            "add"
+                                        ) {
+
+                                            const yBlock =
+                                                blocks.get(
+                                                    blockId
+                                                );
+
+
+                                            if (!yBlock) {
+                                                return;
                                             }
 
 
-                                            return {
+                                            const newBlock = {
 
-                                                ...previousDocument,
+                                                _id:
+                                                    blockId,
 
-                                                blocks:
-                                                    previousDocument
-                                                        .blocks
-                                                        .filter(
-                                                            (
-                                                                block
-                                                            ) =>
-                                                                block._id !==
-                                                                blockId
+                                                type:
+                                                    yBlock.get(
+                                                        "type"
+                                                    ) ||
+                                                    "paragraph",
+
+                                                content:
+                                                    yBlock
+                                                        .get(
+                                                            "content"
                                                         )
+                                                        ?.toString() ||
+                                                    "",
+
+                                                level:
+                                                    yBlock.get(
+                                                        "level"
+                                                    ) ||
+                                                    0,
+
+                                                language:
+                                                    yBlock.get(
+                                                        "language"
+                                                    ) ||
+                                                    null,
+
+                                                children: []
 
                                             };
 
+
+                                            console.log(
+                                                "NEW REMOTE BLOCK:",
+                                                newBlock
+                                            );
+
+
+                                            setDocument(
+                                                (
+                                                    previousDocument
+                                                ) => {
+
+                                                    if (
+                                                        !previousDocument
+                                                    ) {
+
+                                                        return previousDocument;
+
+                                                    }
+
+
+                                                    const alreadyExists =
+                                                        previousDocument
+                                                            .blocks
+                                                            .some(
+                                                                (
+                                                                    block
+                                                                ) =>
+                                                                    block._id ===
+                                                                    blockId
+                                                            );
+
+
+                                                    if (
+                                                        alreadyExists
+                                                    ) {
+
+                                                        return previousDocument;
+
+                                                    }
+
+
+                                                    return {
+
+                                                        ...previousDocument,
+
+                                                        blocks: [
+                                                            ...previousDocument.blocks,
+                                                            newBlock
+                                                        ]
+
+                                                    };
+
+                                                }
+                                            );
+
                                         }
-                                    );
 
-                                }
 
-                            }
+                                        // =================================
+                                        // DELETE BLOCK
+                                        // =================================
+
+                                        if (
+                                            change.action ===
+                                            "delete"
+                                        ) {
+
+                                            console.log(
+                                                "REMOTE BLOCK DELETED:",
+                                                blockId
+                                            );
+
+
+                                            setDocument(
+                                                (
+                                                    previousDocument
+                                                ) => {
+
+                                                    if (
+                                                        !previousDocument
+                                                    ) {
+
+                                                        return previousDocument;
+
+                                                    }
+
+
+                                                    return {
+
+                                                        ...previousDocument,
+
+                                                        blocks:
+                                                            previousDocument
+                                                                .blocks
+                                                                .filter(
+                                                                    (
+                                                                        block
+                                                                    ) =>
+                                                                        block._id !==
+                                                                        blockId
+                                                                )
+
+                                                    };
+
+                                                }
+                                            );
+
+                                        }
+
+                                    }
+                                );
+
+                            };
+
+
+                        blocks.observe(
+                            handleBlocksChange
                         );
 
-                    };
 
+                        // =========================================
+                        // INITIALIZE YJS BLOCKS
+                        // =========================================
 
-                blocks.observe(
-                    handleBlocksChange
-                );
+                        if (
+                            blocks.size === 0
+                        ) {
 
-
-                // =================================
-                // INITIALIZE YJS BLOCKS
-                // =================================
-
-                if (
-                    blocks.size === 0
-                ) {
-
-                    console.log(
-                        "INITIALIZING YJS BLOCKS FROM MONGODB"
-                    );
-
-
-                    data.document.blocks.forEach(
-                        (block) => {
-
-                            const yBlock =
-                                new Y.Map();
-
-
-                            yBlock.set(
-                                "type",
-                                block.type
+                            console.log(
+                                "INITIALIZING YJS BLOCKS FROM MONGODB"
                             );
 
 
-                            yBlock.set(
-                                "level",
-                                block.level || 0
-                            );
+                            data.document.blocks.forEach(
+                                (block) => {
+
+                                    const yBlock =
+                                        new Y.Map();
 
 
-                            yBlock.set(
-                                "language",
-                                block.language ||
-                                    null
-                            );
+                                    yBlock.set(
+                                        "type",
+                                        block.type
+                                    );
 
 
-                            const yText =
-                                new Y.Text();
+                                    yBlock.set(
+                                        "level",
+                                        block.level || 0
+                                    );
 
 
-                            yText.insert(
-                                0,
-                                block.content || ""
-                            );
+                                    yBlock.set(
+                                        "language",
+                                        block.language ||
+                                        null
+                                    );
 
 
-                            yBlock.set(
-                                "content",
-                                yText
-                            );
+                                    const yText =
+                                        new Y.Text();
 
 
-                            blocks.set(
-                                block._id,
-                                yBlock
+                                    yText.insert(
+                                        0,
+                                        block.content || ""
+                                    );
+
+
+                                    yBlock.set(
+                                        "content",
+                                        yText
+                                    );
+
+
+                                    blocks.set(
+                                        block._id,
+                                        yBlock
+                                    );
+
+                                }
                             );
 
                         }
+
+
+                        console.log(
+                            "YJS BLOCKS:",
+                            blocks.toJSON()
+                        );
+
+
+                    } catch (error) {
+
+                        console.error(
+                            "FAILED TO LOAD DOCUMENT:",
+                            error
+                        );
+
+                    } finally {
+
+                    console.log(
+                        "FINISHED LOADING"
+                    );
+
+                    setLoading(
+                        false
                     );
 
                 }
 
+            };
+
+
+            loadDocument();
+
+
+            // =========================================
+            // CLEANUP
+            // =========================================
+
+            return () => {
 
                 console.log(
-                    "YJS BLOCKS:",
-                    blocks.toJSON()
+                    "CLEANING UP YJS CONNECTION"
                 );
 
 
-            } catch (error) {
+                if (connection) {
 
-                console.error(
-                    "FAILED TO LOAD DOCUMENT:",
-                    error
-                );
-
-            } finally {
-
-                console.log(
-                    "FINISHED LOADING"
-                );
+                    connection.awareness.setLocalStateField(
+                        "editingBlock",
+                        null
+                    );
 
 
-                setLoading(
-                    false
-                );
-
-            }
-
-        };
+                    connection.awareness.off(
+                        "change",
+                        updateOnlineUsers
+                    );
 
 
-        loadDocument();
+                    connection.blocks.unobserve(
+                        handleBlocksChange
+                    );
 
 
-        // =========================================
-        // CLEANUP
-        // =========================================
-
-        return () => {
-
-            console.log(
-                "CLEANING UP YJS CONNECTION"
-            );
+                    connection.destroy();
 
 
-            if (connection) {
+                    yjsRef.current =
+                        null;
 
-                // Remove awareness listener
-                connection.awareness.off(
-                    "change",
-                    updateOnlineUsers
-                );
+                }
 
+            };
 
-                // Remove blocks listener
-                connection.blocks.unobserve(
-                    handleBlocksChange
-                );
-
-
-                // Destroy YJS connection
-                connection.destroy();
-
-
-                yjsRef.current =
-                    null;
-
-            }
-
-        };
-
-
-    }, [currentUser]);
+        }, [currentUser]);
 
 
     // =========================================
     // ADD BLOCK
     // =========================================
 
-    const handleAddBlock =
-        async (type) => {
+    const handleAddBlock = async (type) => {
 
-            try {
+        try {
 
-                const blockData = {
+            const blockData = {
+                type,
+                content: "",
+                level: type === "heading" ? 2 : 0,
+                language:
+                    type === "code"
+                        ? "javascript"
+                        : null
+            };
 
-                    type,
+            console.log(
+                "CREATING BLOCK:",
+                blockData
+            );
 
-                    content: "",
+            // -----------------------------------------
+            // CREATE BLOCK IN MONGODB
+            // -----------------------------------------
 
-                    level:
-                        type === "heading"
-                            ? 2
-                            : 0,
+            const data = await createBlock(
+                blockData
+            );
 
-                    language:
-                        type === "code"
-                            ? "javascript"
-                            : null
+            const newBlock = data.block;
 
-                };
+            console.log(
+                "BLOCK CREATED IN MONGODB:",
+                newBlock
+            );
 
+            // -----------------------------------------
+            // ADD BLOCK TO YJS
+            // -----------------------------------------
 
-                console.log(
-                    "CREATING BLOCK:",
-                    blockData
-                );
+            const connection = yjsRef.current;
 
-
-                // ---------------------------------
-                // CREATE IN MONGODB
-                // ---------------------------------
-
-                const data =
-                    await createBlock(
-                        blockData
-                    );
-
-
-                console.log(
-                    "BLOCK CREATED:",
-                    data
-                );
-
-
-                const newBlock =
-                    data.block;
-
-
-                // ---------------------------------
-                // UPDATE REACT STATE
-                // ---------------------------------
-
-                setDocument(
-                    (previousDocument) => ({
-
-                        ...previousDocument,
-
-                        blocks: [
-                            ...previousDocument.blocks,
-                            newBlock
-                        ]
-
-                    })
-                );
-
-
-                // ---------------------------------
-                // ADD TO YJS
-                // ---------------------------------
-
-                const connection =
-                    yjsRef.current;
-
-
-                if (connection) {
-
-                    const yBlock =
-                        new Y.Map();
-
-
-                    yBlock.set(
-                        "type",
-                        newBlock.type
-                    );
-
-
-                    yBlock.set(
-                        "level",
-                        newBlock.level || 0
-                    );
-
-
-                    yBlock.set(
-                        "language",
-                        newBlock.language ||
-                            null
-                    );
-
-
-                    const yText =
-                        new Y.Text();
-
-
-                    yText.insert(
-                        0,
-                        newBlock.content || ""
-                    );
-
-
-                    yBlock.set(
-                        "content",
-                        yText
-                    );
-
-
-                    connection.blocks.set(
-                        newBlock._id,
-                        yBlock
-                    );
-
-
-                    console.log(
-                        "NEW BLOCK ADDED TO YJS:",
-                        newBlock._id
-                    );
-
-                }
-
-
-            } catch (error) {
-
+            if (!connection) {
                 console.error(
-                    "FAILED TO CREATE BLOCK:",
-                    error
+                    "YJS CONNECTION NOT AVAILABLE"
                 );
-
+                return;
             }
 
-        };
+            const yBlock = new Y.Map();
+
+            yBlock.set(
+                "type",
+                newBlock.type
+            );
+
+            yBlock.set(
+                "level",
+                newBlock.level || 0
+            );
+
+            yBlock.set(
+                "language",
+                newBlock.language || null
+            );
+
+            const yText = new Y.Text();
+
+            yText.insert(
+                0,
+                newBlock.content || ""
+            );
+
+            yBlock.set(
+                "content",
+                yText
+            );
+
+            // -----------------------------------------
+            // THIS WILL TRIGGER blocks.observe()
+            // -----------------------------------------
+
+            connection.blocks.set(
+                newBlock._id,
+                yBlock
+            );
+
+            console.log(
+                "BLOCK ADDED TO YJS:",
+                newBlock._id
+            );
+
+        } catch (error) {
+
+            console.error(
+                "FAILED TO CREATE BLOCK:",
+                error
+            );
+
+        }
+
+    };
 
 
     // =========================================
     // DELETE BLOCK
     // =========================================
 
-    const handleDeleteBlock =
-        async (blockId) => {
+    const handleDeleteBlock = async (blockId) => {
 
-            try {
+        try {
 
-                console.log(
-                    "DELETING BLOCK:",
-                    blockId
-                );
+            console.log(
+                "DELETING BLOCK:",
+                blockId
+            );
 
+            // -----------------------------------------
+            // DELETE FROM MONGODB
+            // -----------------------------------------
 
-                // ---------------------------------
-                // DELETE FROM MONGODB
-                // ---------------------------------
+            await deleteBlock(blockId);
 
-                await deleteBlock(
-                    blockId
-                );
+            console.log(
+                "BLOCK DELETED FROM MONGODB:",
+                blockId
+            );
 
+            // -----------------------------------------
+            // DELETE FROM YJS
+            // -----------------------------------------
 
-                // ---------------------------------
-                // DELETE FROM REACT STATE
-                // ---------------------------------
+            const connection = yjsRef.current;
 
-                setDocument(
-                    (previousDocument) => ({
-
-                        ...previousDocument,
-
-                        blocks:
-                            previousDocument.blocks.filter(
-                                (block) =>
-                                    block._id !==
-                                    blockId
-                            )
-
-                    })
-                );
-
-
-                // ---------------------------------
-                // DELETE FROM YJS
-                // ---------------------------------
-
-                const connection =
-                    yjsRef.current;
-
-
-                if (connection) {
-
-                    connection.blocks.delete(
-                        blockId
-                    );
-
-
-                    console.log(
-                        "BLOCK DELETED FROM YJS:",
-                        blockId
-                    );
-
-                }
-
-
-            } catch (error) {
-
+            if (!connection) {
                 console.error(
-                    "FAILED TO DELETE BLOCK:",
-                    error
+                    "YJS CONNECTION NOT AVAILABLE"
                 );
-
+                return;
             }
 
-        };
+            connection.blocks.delete(
+                blockId
+            );
+
+            console.log(
+                "BLOCK DELETED FROM YJS:",
+                blockId
+            );
+
+            // blocks.observe() will now remove it
+            // from React state.
+
+        } catch (error) {
+
+            console.error(
+                "FAILED TO DELETE BLOCK:",
+                error
+            );
+
+        }
+
+    };
 
 
     // =========================================
     // BLOCK FOCUS
     // =========================================
 
-const handleBlockFocus = (blockId) => {
+    const handleBlockFocus =
+        (blockId) => {
 
-    const connection = yjsRef.current;
-
-    if (!connection) {
-        return;
-    }
-
-    console.log(
-        `${currentUser} started editing block:`,
-        blockId
-    );
-
-    connection.awareness.setLocalStateField(
-        "editingBlock",
-        blockId
-    );
-};
+            const connection =
+                yjsRef.current;
 
 
-const handleBlockBlur = (blockId) => {
+            if (!connection) {
+                return;
+            }
 
-    const connection = yjsRef.current;
 
-    if (!connection) {
-        return;
-    }
+            console.log(
+                `${currentUser} started editing block:`,
+                blockId
+            );
 
-    console.log(
-        `${currentUser} stopped editing block:`,
-        blockId
-    );
 
-    connection.awareness.setLocalStateField(
-        "editingBlock",
-        null
-    );
-};
+            connection.awareness.setLocalStateField(
+                "editingBlock",
+                blockId
+            );
+
+        };
+
+
+    // =========================================
+    // BLOCK BLUR
+    // =========================================
+
+    const handleBlockBlur =
+        (blockId) => {
+
+            const connection =
+                yjsRef.current;
+
+
+            if (!connection) {
+                return;
+            }
+
+
+            console.log(
+                `${currentUser} stopped editing block:`,
+                blockId
+            );
+
+
+            connection.awareness.setLocalStateField(
+                "editingBlock",
+                null
+            );
+
+        };
 
 
     // =========================================
@@ -839,12 +868,12 @@ const handleBlockBlur = (blockId) => {
     // =========================================
 
     const handleBlockChange =
-        (blockId, content) => {
+        (blockId, content, isRemote = false) => {
 
 
-            // ---------------------------------
+            // =================================
             // UPDATE REACT STATE
-            // ---------------------------------
+            // =================================
 
             setDocument(
                 (previousDocument) => {
@@ -852,7 +881,9 @@ const handleBlockBlur = (blockId) => {
                     if (
                         !previousDocument
                     ) {
+
                         return previousDocument;
+
                     }
 
 
@@ -895,28 +926,28 @@ const handleBlockBlur = (blockId) => {
             );
 
 
-            // ---------------------------------
-            // CLEAR OLD SAVE TIMER
-            // ---------------------------------
+            // =================================
+            // CLEAR OLD TIMER
+            // =================================
 
             if (
                 saveTimers.current[
-                    blockId
+                blockId
                 ]
             ) {
 
                 clearTimeout(
                     saveTimers.current[
-                        blockId
+                    blockId
                     ]
                 );
 
             }
 
 
-            // ---------------------------------
+            // =================================
             // SAVE TO MONGODB
-            // ---------------------------------
+            // =================================
 
             saveTimers.current[
                 blockId
@@ -1061,6 +1092,17 @@ const handleBlockBlur = (blockId) => {
                 >
                     + Bullet
                 </button>
+                <button
+                    onClick={handleUndo}
+                >
+                    ↶ Undo
+                </button>
+
+                <button
+                    onClick={handleRedo}
+                >
+                    ↷ Redo
+                </button>
 
             </div>
 
@@ -1159,18 +1201,42 @@ const handleBlockBlur = (blockId) => {
 
                     return (
 
-<EditableBlock
-    key={block._id}
-    block={block}
-    yBlock={yBlock}
-    onChange={handleBlockChange}
-    onFocus={handleBlockFocus}
-    onBlur={handleBlockBlur}
-    onDelete={handleDeleteBlock}
-    editingUsers={
-        activeUsers[block._id] || []
-    }
-/>
+                        <EditableBlock
+                            key={
+                                block._id
+                            }
+
+                            block={
+                                block
+                            }
+
+                            yBlock={
+                                yBlock
+                            }
+
+                            onChange={
+                                handleBlockChange
+                            }
+
+                            onFocus={
+                                handleBlockFocus
+                            }
+
+                            onBlur={
+                                handleBlockBlur
+                            }
+
+                            onDelete={
+                                handleDeleteBlock
+                            }
+
+                            editingUsers={
+                                activeUsers[
+                                block._id
+                                ] || []
+                            }
+
+                        />
 
                     );
 
