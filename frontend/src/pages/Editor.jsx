@@ -5,7 +5,8 @@ import {
     deleteBlock
 } from "../services/documentService";
 
-import EditableBlock from "../components/EditableBlock";
+import EditableBlock
+    from "../components/EditableBlock";
 
 import {
     useEffect,
@@ -34,11 +35,13 @@ function Editor() {
         "EDITOR COMPONENT IS RUNNING"
     );
 
+
     const currentUser =
         getCurrentUser();
 
+
     console.log(
-        "Current user:",
+        "CURRENT USER:",
         currentUser
     );
 
@@ -47,17 +50,28 @@ function Editor() {
     // STATE
     // =========================================
 
-    const [document, setDocument] =
-        useState(null);
+    const [
+        document,
+        setDocument
+    ] = useState(null);
 
-    const [loading, setLoading] =
-        useState(true);
 
-    const [onlineUsers, setOnlineUsers] =
-        useState([]);
+    const [
+        loading,
+        setLoading
+    ] = useState(true);
 
-    const [activeUsers, setActiveUsers] =
-        useState({});
+
+    const [
+        onlineUsers,
+        setOnlineUsers
+    ] = useState([]);
+
+
+    const [
+        activeUsers,
+        setActiveUsers
+    ] = useState({});
 
 
     // =========================================
@@ -66,6 +80,7 @@ function Editor() {
 
     const saveTimers =
         useRef({});
+
 
     const yjsRef =
         useRef(null);
@@ -77,509 +92,530 @@ function Editor() {
 
     useEffect(() => {
 
-        console.log(
-            "USE EFFECT IS RUNNING"
-        );
-
         let connection = null;
 
-        const loadDocument = async () => {
 
-            console.log(
-                "LOAD DOCUMENT FUNCTION STARTED"
-            );
+        // =====================================
+        // ONLINE USERS
+        // =====================================
 
-            try {
+        let updateOnlineUsers = null;
 
-                // =================================
-                // GET DOCUMENT
-                // =================================
 
-                console.log(
-                    "CALLING API..."
-                );
+        // =====================================
+        // BLOCK CHANGES
+        // =====================================
 
-                const data =
-                    await getDocument(
-                        DOCUMENT_ID
+        let handleBlocksChange = null;
+
+
+        const loadDocument =
+            async () => {
+
+                try {
+
+                    console.log(
+                        "CALLING DOCUMENT API..."
                     );
 
-                console.log(
-                    "API RESPONSE:",
-                    data
-                );
 
-                setDocument(
-                    data.document
-                );
+                    // =================================
+                    // GET DOCUMENT
+                    // =================================
 
-                console.log(
-                    "DOCUMENT SET"
-                );
-
-
-                // =================================
-                // CREATE YJS CONNECTION
-                // =================================
-
-                connection =
-                    createYjsConnection(
-                        DOCUMENT_ID,
-                        currentUser
-                    );
-
-                console.log(
-                    "YJS CONNECTION CREATED"
-                );
-
-                yjsRef.current =
-                    connection;
-
-
-                console.log(
-                    "CURRENT USER:",
-                    currentUser
-                );
-
-                console.log(
-                    "AWARENESS STATE:",
-                    connection.awareness.getStates()
-                );
-
-
-                const {
-                    blocks,
-                    awareness
-                } = connection;
-
-
-                // =========================================
-                // UPDATE ONLINE USERS
-                // =========================================
-
-                const updateOnlineUsers = () => {
-
-                    const states =
-                        Array.from(
-                            awareness
-                                .getStates()
-                                .values()
+                    const data =
+                        await getDocument(
+                            DOCUMENT_ID
                         );
 
 
-                    const users =
-                        states
-                            .map((state) => {
+                    console.log(
+                        "DOCUMENT RECEIVED:",
+                        data
+                    );
 
-                                if (!state.user) {
-                                    return null;
-                                }
 
-                                return {
-                                    name:
-                                        state.user.name,
+                    setDocument(
+                        data.document
+                    );
 
-                                    editingBlock:
-                                        state.editingBlock ||
-                                        null
-                                };
 
-                            })
-                            .filter(Boolean);
+                    // =================================
+                    // CREATE YJS CONNECTION
+                    // =================================
+
+                    connection =
+                        createYjsConnection(
+                            DOCUMENT_ID,
+                            currentUser
+                        );
+
+
+                    yjsRef.current =
+                        connection;
 
 
                     console.log(
-                        "ONLINE USERS:",
-                        users
+                        "YJS CONNECTION CREATED"
                     );
 
 
-                    setOnlineUsers(
-                        users
-                    );
+                    const {
+                        blocks,
+                        awareness
+                    } = connection;
 
 
-                    // =====================================
-                    // BUILD ACTIVE EDITING USERS
-                    // =====================================
+                    // =================================
+                    // ONLINE USERS
+                    // =================================
 
-                    const editing = {};
+                    updateOnlineUsers =
+                        () => {
 
-
-                    users.forEach((user) => {
-
-                        if (
-                            !user.editingBlock
-                        ) {
-                            return;
-                        }
-
-
-                        if (
-                            !editing[
-                            user.editingBlock
-                            ]
-                        ) {
-
-                            editing[
-                                user.editingBlock
-                            ] = [];
-
-                        }
+                            const states =
+                                Array.from(
+                                    awareness
+                                        .getStates()
+                                        .values()
+                                );
 
 
-                        // IMPORTANT:
-                        // Store object instead of string
-                        editing[
-                            user.editingBlock
-                        ].push({
-                            name: user.name
-                        });
+                            const users =
+                                states
+                                    .map(
+                                        (
+                                            state
+                                        ) => {
 
-                    });
+                                            if (
+                                                !state.user
+                                            ) {
 
+                                                return null;
 
-                    console.log(
-                        "ACTIVE EDITING USERS:",
-                        editing
-                    );
-
-
-                    setActiveUsers(
-                        editing
-                    );
-
-                };
-
-
-                // =========================================
-                // AWARENESS LISTENER
-                // =========================================
-
-                awareness.on(
-                    "change",
-                    updateOnlineUsers
-                );
-
-
-                // Get initial users
-                updateOnlineUsers();
-                // =========================================
-                // UNDO
-                // =========================================
-
-                const handleUndo = () => {
-
-                    const connection = yjsRef.current;
-
-                    if (!connection) {
-                        return;
-                    }
-
-                    connection.undoManager.undo();
-
-                };
-
-
-                // =========================================
-                // REDO
-                // =========================================
-
-                const handleRedo = () => {
-
-                    const connection = yjsRef.current;
-
-                    if (!connection) {
-                        return;
-                    }
-
-                    connection.undoManager.redo();
-
-                };
-
-
-                // =========================================
-                // BLOCK CONTENT CHANGE
-                // =========================================
-
-                const handleBlockChange =
-                    (blockId, content, isRemote = false) => {
-
-
-                        // =========================================
-                        // YJS BLOCK CHANGES
-                        // =========================================
-
-                        const handleBlocksChange =
-                            (event) => {
-
-                                event.changes.keys.forEach(
-                                    (
-                                        change,
-                                        blockId
-                                    ) => {
-
-
-                                        // =================================
-                                        // NEW BLOCK
-                                        // =================================
-
-                                        if (
-                                            change.action ===
-                                            "add"
-                                        ) {
-
-                                            const yBlock =
-                                                blocks.get(
-                                                    blockId
-                                                );
-
-
-                                            if (!yBlock) {
-                                                return;
                                             }
 
 
-                                            const newBlock = {
+                                            return {
 
-                                                _id:
-                                                    blockId,
+                                                name:
+                                                    state
+                                                        .user
+                                                        .name,
 
-                                                type:
-                                                    yBlock.get(
-                                                        "type"
-                                                    ) ||
-                                                    "paragraph",
-
-                                                content:
-                                                    yBlock
-                                                        .get(
-                                                            "content"
-                                                        )
-                                                        ?.toString() ||
-                                                    "",
-
-                                                level:
-                                                    yBlock.get(
-                                                        "level"
-                                                    ) ||
-                                                    0,
-
-                                                language:
-                                                    yBlock.get(
-                                                        "language"
-                                                    ) ||
-                                                    null,
-
-                                                children: []
+                                                editingBlock:
+                                                    state
+                                                        .editingBlock ||
+                                                    null
 
                                             };
 
-
-                                            console.log(
-                                                "NEW REMOTE BLOCK:",
-                                                newBlock
-                                            );
-
-
-                                            setDocument(
-                                                (
-                                                    previousDocument
-                                                ) => {
-
-                                                    if (
-                                                        !previousDocument
-                                                    ) {
-
-                                                        return previousDocument;
-
-                                                    }
-
-
-                                                    const alreadyExists =
-                                                        previousDocument
-                                                            .blocks
-                                                            .some(
-                                                                (
-                                                                    block
-                                                                ) =>
-                                                                    block._id ===
-                                                                    blockId
-                                                            );
-
-
-                                                    if (
-                                                        alreadyExists
-                                                    ) {
-
-                                                        return previousDocument;
-
-                                                    }
-
-
-                                                    return {
-
-                                                        ...previousDocument,
-
-                                                        blocks: [
-                                                            ...previousDocument.blocks,
-                                                            newBlock
-                                                        ]
-
-                                                    };
-
-                                                }
-                                            );
-
                                         }
+                                    )
+                                    .filter(
+                                        Boolean
+                                    );
 
 
-                                        // =================================
-                                        // DELETE BLOCK
-                                        // =================================
+                            setOnlineUsers(
+                                users
+                            );
 
-                                        if (
-                                            change.action ===
-                                            "delete"
-                                        ) {
 
-                                            console.log(
-                                                "REMOTE BLOCK DELETED:",
+                            // =================================
+                            // BUILD ACTIVE USERS
+                            // =================================
+
+                            const editing =
+                                {};
+
+
+                            users.forEach(
+                                (
+                                    user
+                                ) => {
+
+                                    if (
+                                        !user.editingBlock
+                                    ) {
+
+                                        return;
+
+                                    }
+
+
+                                    if (
+                                        !editing[
+                                            user.editingBlock
+                                        ]
+                                    ) {
+
+                                        editing[
+                                            user.editingBlock
+                                        ] = [];
+
+                                    }
+
+
+                                    editing[
+                                        user.editingBlock
+                                    ].push({
+
+                                        name:
+                                            user.name
+
+                                    });
+
+                                }
+                            );
+
+
+                            setActiveUsers(
+                                editing
+                            );
+
+                        };
+
+
+                    awareness.on(
+                        "change",
+                        updateOnlineUsers
+                    );
+
+
+                    updateOnlineUsers();
+
+
+                    // =================================
+                    // BLOCK CHANGES
+                    // =================================
+
+                    handleBlocksChange =
+                        (event) => {
+
+                            event.changes.keys.forEach(
+                                (
+                                    change,
+                                    blockId
+                                ) => {
+
+                                    // =================================
+                                    // NEW BLOCK
+                                    // =================================
+
+                                    if (
+                                        change.action ===
+                                        "add"
+                                    ) {
+
+                                        const yBlock =
+                                            blocks.get(
                                                 blockId
                                             );
 
 
-                                            setDocument(
-                                                (
-                                                    previousDocument
-                                                ) => {
+                                        if (
+                                            !yBlock
+                                        ) {
 
-                                                    if (
-                                                        !previousDocument
-                                                    ) {
-
-                                                        return previousDocument;
-
-                                                    }
-
-
-                                                    return {
-
-                                                        ...previousDocument,
-
-                                                        blocks:
-                                                            previousDocument
-                                                                .blocks
-                                                                .filter(
-                                                                    (
-                                                                        block
-                                                                    ) =>
-                                                                        block._id !==
-                                                                        blockId
-                                                                )
-
-                                                    };
-
-                                                }
-                                            );
+                                            return;
 
                                         }
 
+
+                                        const yText =
+                                            yBlock.get(
+                                                "content"
+                                            );
+
+
+                                        // Register the text
+                                        // with UndoManager
+                                        if (
+                                            yText
+                                        ) {
+
+                                            connection
+                                                .registerTextForUndo(
+                                                    yText
+                                                );
+
+                                        }
+
+
+                                        const newBlock = {
+
+                                            _id:
+                                                blockId,
+
+                                            type:
+                                                yBlock.get(
+                                                    "type"
+                                                ) ||
+                                                "paragraph",
+
+                                            content:
+                                                yText
+                                                    ? yText
+                                                        .toString()
+                                                    : "",
+
+                                            level:
+                                                yBlock.get(
+                                                    "level"
+                                                ) ||
+                                                0,
+
+                                            language:
+                                                yBlock.get(
+                                                    "language"
+                                                ) ||
+                                                null,
+
+                                            children:
+                                                []
+
+                                        };
+
+
+                                        setDocument(
+                                            (
+                                                previousDocument
+                                            ) => {
+
+                                                if (
+                                                    !previousDocument
+                                                ) {
+
+                                                    return previousDocument;
+
+                                                }
+
+
+                                                const exists =
+                                                    previousDocument
+                                                        .blocks
+                                                        .some(
+                                                            (
+                                                                block
+                                                            ) =>
+                                                                block._id ===
+                                                                blockId
+                                                        );
+
+
+                                                if (
+                                                    exists
+                                                ) {
+
+                                                    return previousDocument;
+
+                                                }
+
+
+                                                return {
+
+                                                    ...previousDocument,
+
+                                                    blocks:
+                                                        [
+                                                            ...previousDocument.blocks,
+
+                                                            newBlock
+                                                        ]
+
+                                                };
+
+                                            }
+                                        );
+
                                     }
-                                );
-
-                            };
 
 
-                        blocks.observe(
-                            handleBlocksChange
-                        );
+                                    // =================================
+                                    // DELETE BLOCK
+                                    // =================================
+
+                                    if (
+                                        change.action ===
+                                        "delete"
+                                    ) {
+
+                                        setDocument(
+                                            (
+                                                previousDocument
+                                            ) => {
+
+                                                if (
+                                                    !previousDocument
+                                                ) {
+
+                                                    return previousDocument;
+
+                                                }
 
 
-                        // =========================================
-                        // INITIALIZE YJS BLOCKS
-                        // =========================================
+                                                return {
 
-                        if (
-                            blocks.size === 0
-                        ) {
+                                                    ...previousDocument,
 
-                            console.log(
-                                "INITIALIZING YJS BLOCKS FROM MONGODB"
-                            );
+                                                    blocks:
+                                                        previousDocument
+                                                            .blocks
+                                                            .filter(
+                                                                (
+                                                                    block
+                                                                ) =>
+                                                                    block._id !==
+                                                                    blockId
+                                                            )
 
+                                                };
 
-                            data.document.blocks.forEach(
-                                (block) => {
+                                            }
+                                        );
 
-                                    const yBlock =
-                                        new Y.Map();
-
-
-                                    yBlock.set(
-                                        "type",
-                                        block.type
-                                    );
-
-
-                                    yBlock.set(
-                                        "level",
-                                        block.level || 0
-                                    );
-
-
-                                    yBlock.set(
-                                        "language",
-                                        block.language ||
-                                        null
-                                    );
-
-
-                                    const yText =
-                                        new Y.Text();
-
-
-                                    yText.insert(
-                                        0,
-                                        block.content || ""
-                                    );
-
-
-                                    yBlock.set(
-                                        "content",
-                                        yText
-                                    );
-
-
-                                    blocks.set(
-                                        block._id,
-                                        yBlock
-                                    );
+                                    }
 
                                 }
                             );
 
-                        }
+                        };
 
+
+                    blocks.observe(
+                        handleBlocksChange
+                    );
+
+
+                    // =================================
+                    // INITIALIZE BLOCKS
+                    // =================================
+
+                    if (
+                        blocks.size === 0
+                    ) {
 
                         console.log(
-                            "YJS BLOCKS:",
-                            blocks.toJSON()
+                            "INITIALIZING YJS BLOCKS"
                         );
 
 
-                    } catch (error) {
+                        data.document.blocks.forEach(
+                            (
+                                block
+                            ) => {
 
-                        console.error(
-                            "FAILED TO LOAD DOCUMENT:",
-                            error
+                                const yBlock =
+                                    new Y.Map();
+
+
+                                yBlock.set(
+                                    "type",
+                                    block.type
+                                );
+
+
+                                yBlock.set(
+                                    "level",
+                                    block.level ||
+                                    0
+                                );
+
+
+                                yBlock.set(
+                                    "language",
+                                    block.language ||
+                                    null
+                                );
+
+
+                                const yText =
+                                    new Y.Text();
+
+
+                                yText.insert(
+                                    0,
+                                    block.content ||
+                                    ""
+                                );
+
+
+                                yBlock.set(
+                                    "content",
+                                    yText
+                                );
+
+
+                                // Put block into YJS first
+                                blocks.set(
+                                    block._id,
+                                    yBlock
+                                );
+
+
+                                // Now register text
+                                // for Undo / Redo
+                                connection
+                                    .registerTextForUndo(
+                                        yText
+                                    );
+
+                            }
                         );
 
-                    } finally {
+                    } else {
+
+                        // =================================
+                        // REGISTER EXISTING YJS TEXTS
+                        // =================================
+
+                        blocks.forEach(
+                            (
+                                yBlock
+                            ) => {
+
+                                const yText =
+                                    yBlock.get(
+                                        "content"
+                                    );
+
+
+                                if (
+                                    yText
+                                ) {
+
+                                    connection
+                                        .registerTextForUndo(
+                                            yText
+                                        );
+
+                                }
+
+                            }
+                        );
+
+                    }
+
 
                     console.log(
-                        "FINISHED LOADING"
+                        "YJS BLOCKS:",
+                        blocks.toJSON()
                     );
+
+
+                } catch (
+                    error
+                ) {
+
+                    console.error(
+                        "FAILED TO LOAD DOCUMENT:",
+                        error
+                    );
+
+
+                } finally {
 
                     setLoading(
                         false
@@ -590,217 +626,272 @@ function Editor() {
             };
 
 
-            loadDocument();
+        loadDocument();
 
 
-            // =========================================
-            // CLEANUP
-            // =========================================
+        // =========================================
+        // CLEANUP
+        // =========================================
 
-            return () => {
+        return () => {
 
-                console.log(
-                    "CLEANING UP YJS CONNECTION"
-                );
+            console.log(
+                "CLEANING UP EDITOR"
+            );
 
 
-                if (connection) {
+            if (
+                connection
+            ) {
 
-                    connection.awareness.setLocalStateField(
-                        "editingBlock",
-                        null
-                    );
-
+                if (
+                    updateOnlineUsers
+                ) {
 
                     connection.awareness.off(
                         "change",
                         updateOnlineUsers
                     );
 
+                }
+
+
+                if (
+                    handleBlocksChange
+                ) {
 
                     connection.blocks.unobserve(
                         handleBlocksChange
                     );
 
-
-                    connection.destroy();
-
-
-                    yjsRef.current =
-                        null;
-
                 }
 
-            };
 
-        }, [currentUser]);
+                connection.awareness
+                    .setLocalStateField(
+                        "editingBlock",
+                        null
+                    );
+
+
+                connection.destroy();
+
+
+                yjsRef.current =
+                    null;
+
+            }
+
+        };
+
+    }, [
+        currentUser
+    ]);
 
 
     // =========================================
     // ADD BLOCK
     // =========================================
 
-    const handleAddBlock = async (type) => {
+    const handleAddBlock =
+        async (
+            type
+        ) => {
 
-        try {
+            try {
 
-            const blockData = {
-                type,
-                content: "",
-                level: type === "heading" ? 2 : 0,
-                language:
-                    type === "code"
-                        ? "javascript"
-                        : null
-            };
+                const blockData = {
 
-            console.log(
-                "CREATING BLOCK:",
-                blockData
-            );
+                    type,
 
-            // -----------------------------------------
-            // CREATE BLOCK IN MONGODB
-            // -----------------------------------------
+                    content:
+                        "",
 
-            const data = await createBlock(
-                blockData
-            );
+                    level:
+                        type === "heading"
+                            ? 2
+                            : 0,
 
-            const newBlock = data.block;
+                    language:
+                        type === "code"
+                            ? "javascript"
+                            : null
 
-            console.log(
-                "BLOCK CREATED IN MONGODB:",
-                newBlock
-            );
+                };
 
-            // -----------------------------------------
-            // ADD BLOCK TO YJS
-            // -----------------------------------------
 
-            const connection = yjsRef.current;
+                const data =
+                    await createBlock(
+                        blockData
+                    );
 
-            if (!connection) {
-                console.error(
-                    "YJS CONNECTION NOT AVAILABLE"
+
+                const newBlock =
+                    data.block;
+
+
+                const connection =
+                    yjsRef.current;
+
+
+                if (
+                    !connection
+                ) {
+
+                    console.error(
+                        "YJS CONNECTION NOT AVAILABLE"
+                    );
+
+                    return;
+
+                }
+
+
+                // =================================
+                // CREATE YJS BLOCK
+                // =================================
+
+                const yBlock =
+                    new Y.Map();
+
+
+                yBlock.set(
+                    "type",
+                    newBlock.type
                 );
-                return;
+
+
+                yBlock.set(
+                    "level",
+                    newBlock.level ||
+                    0
+                );
+
+
+                yBlock.set(
+                    "language",
+                    newBlock.language ||
+                    null
+                );
+
+
+                const yText =
+                    new Y.Text();
+
+
+                yText.insert(
+                    0,
+                    newBlock.content ||
+                    ""
+                );
+
+
+                yBlock.set(
+                    "content",
+                    yText
+                );
+
+
+                // =================================
+                // REGISTER TEXT FOR UNDO
+                // =================================
+
+                connection.registerTextForUndo(
+                    yText
+                );
+
+
+                // =================================
+                // ADD TO YJS
+                // =================================
+
+                connection.blocks.set(
+                    newBlock._id,
+                    yBlock
+                );
+
+
+                console.log(
+                    "BLOCK ADDED:",
+                    newBlock._id
+                );
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "FAILED TO CREATE BLOCK:",
+                    error
+                );
+
             }
 
-            const yBlock = new Y.Map();
-
-            yBlock.set(
-                "type",
-                newBlock.type
-            );
-
-            yBlock.set(
-                "level",
-                newBlock.level || 0
-            );
-
-            yBlock.set(
-                "language",
-                newBlock.language || null
-            );
-
-            const yText = new Y.Text();
-
-            yText.insert(
-                0,
-                newBlock.content || ""
-            );
-
-            yBlock.set(
-                "content",
-                yText
-            );
-
-            // -----------------------------------------
-            // THIS WILL TRIGGER blocks.observe()
-            // -----------------------------------------
-
-            connection.blocks.set(
-                newBlock._id,
-                yBlock
-            );
-
-            console.log(
-                "BLOCK ADDED TO YJS:",
-                newBlock._id
-            );
-
-        } catch (error) {
-
-            console.error(
-                "FAILED TO CREATE BLOCK:",
-                error
-            );
-
-        }
-
-    };
+        };
 
 
     // =========================================
     // DELETE BLOCK
     // =========================================
 
-    const handleDeleteBlock = async (blockId) => {
+    const handleDeleteBlock =
+        async (
+            blockId
+        ) => {
 
-        try {
+            try {
 
-            console.log(
-                "DELETING BLOCK:",
-                blockId
-            );
-
-            // -----------------------------------------
-            // DELETE FROM MONGODB
-            // -----------------------------------------
-
-            await deleteBlock(blockId);
-
-            console.log(
-                "BLOCK DELETED FROM MONGODB:",
-                blockId
-            );
-
-            // -----------------------------------------
-            // DELETE FROM YJS
-            // -----------------------------------------
-
-            const connection = yjsRef.current;
-
-            if (!connection) {
-                console.error(
-                    "YJS CONNECTION NOT AVAILABLE"
+                console.log(
+                    "DELETING BLOCK:",
+                    blockId
                 );
-                return;
+
+
+                // =================================
+                // DELETE FROM MONGODB
+                // =================================
+
+                await deleteBlock(
+                    blockId
+                );
+
+
+                // =================================
+                // DELETE FROM YJS
+                // =================================
+
+                const connection =
+                    yjsRef.current;
+
+
+                if (
+                    connection
+                ) {
+
+                    connection.blocks.delete(
+                        blockId
+                    );
+
+                }
+
+
+                console.log(
+                    "BLOCK DELETED:",
+                    blockId
+                );
+
+            } catch (
+                error
+            ) {
+
+                console.error(
+                    "FAILED TO DELETE BLOCK:",
+                    error
+                );
+
             }
 
-            connection.blocks.delete(
-                blockId
-            );
-
-            console.log(
-                "BLOCK DELETED FROM YJS:",
-                blockId
-            );
-
-            // blocks.observe() will now remove it
-            // from React state.
-
-        } catch (error) {
-
-            console.error(
-                "FAILED TO DELETE BLOCK:",
-                error
-            );
-
-        }
-
-    };
+        };
 
 
     // =========================================
@@ -808,26 +899,32 @@ function Editor() {
     // =========================================
 
     const handleBlockFocus =
-        (blockId) => {
+        (
+            blockId
+        ) => {
 
             const connection =
                 yjsRef.current;
 
 
-            if (!connection) {
+            if (
+                !connection
+            ) {
+
                 return;
+
             }
 
 
+            connection.awareness
+                .setLocalStateField(
+                    "editingBlock",
+                    blockId
+                );
+
+
             console.log(
-                `${currentUser} started editing block:`,
-                blockId
-            );
-
-
-            connection.awareness.setLocalStateField(
-                "editingBlock",
-                blockId
+                `${currentUser} is editing ${blockId}`
             );
 
         };
@@ -838,26 +935,46 @@ function Editor() {
     // =========================================
 
     const handleBlockBlur =
-        (blockId) => {
+        (
+            blockId
+        ) => {
 
             const connection =
                 yjsRef.current;
 
 
-            if (!connection) {
+            if (
+                !connection
+            ) {
+
                 return;
+
+            }
+
+
+            const currentState =
+                connection.awareness
+                    .getLocalState();
+
+
+            // Only clear if this block is
+            // still the active block.
+            if (
+                currentState?.editingBlock ===
+                blockId
+            ) {
+
+                connection.awareness
+                    .setLocalStateField(
+                        "editingBlock",
+                        null
+                    );
+
             }
 
 
             console.log(
-                `${currentUser} stopped editing block:`,
-                blockId
-            );
-
-
-            connection.awareness.setLocalStateField(
-                "editingBlock",
-                null
+                `${currentUser} stopped editing ${blockId}`
             );
 
         };
@@ -868,15 +985,19 @@ function Editor() {
     // =========================================
 
     const handleBlockChange =
-        (blockId, content, isRemote = false) => {
-
+        (
+            blockId,
+            content
+        ) => {
 
             // =================================
             // UPDATE REACT STATE
             // =================================
 
             setDocument(
-                (previousDocument) => {
+                (
+                    previousDocument
+                ) => {
 
                     if (
                         !previousDocument
@@ -887,38 +1008,38 @@ function Editor() {
                     }
 
 
-                    const updatedBlocks =
-                        previousDocument.blocks.map(
-                            (block) => {
-
-                                if (
-                                    block._id ===
-                                    blockId
-                                ) {
-
-                                    return {
-
-                                        ...block,
-
-                                        content
-
-                                    };
-
-                                }
-
-
-                                return block;
-
-                            }
-                        );
-
-
                     return {
 
                         ...previousDocument,
 
                         blocks:
-                            updatedBlocks
+                            previousDocument
+                                .blocks
+                                .map(
+                                    (
+                                        block
+                                    ) => {
+
+                                        if (
+                                            block._id ===
+                                            blockId
+                                        ) {
+
+                                            return {
+
+                                                ...block,
+
+                                                content
+
+                                            };
+
+                                        }
+
+
+                                        return block;
+
+                                    }
+                                )
 
                     };
 
@@ -927,18 +1048,18 @@ function Editor() {
 
 
             // =================================
-            // CLEAR OLD TIMER
+            // CLEAR OLD SAVE TIMER
             // =================================
 
             if (
                 saveTimers.current[
-                blockId
+                    blockId
                 ]
             ) {
 
                 clearTimeout(
                     saveTimers.current[
-                    blockId
+                        blockId
                     ]
                 );
 
@@ -967,8 +1088,9 @@ function Editor() {
                             blockId
                         );
 
-
-                    } catch (error) {
+                    } catch (
+                        error
+                    ) {
 
                         console.error(
                             "FAILED TO SAVE BLOCK:",
@@ -985,15 +1107,113 @@ function Editor() {
 
 
     // =========================================
+    // UNDO
+    // =========================================
+
+    const handleUndo =
+        () => {
+
+            const connection =
+                yjsRef.current;
+
+
+            if (
+                !connection
+            ) {
+
+                console.log(
+                    "YJS CONNECTION NOT AVAILABLE"
+                );
+
+                return;
+
+            }
+
+
+            if (
+                !connection.undoManager.canUndo()
+            ) {
+
+                console.log(
+                    "NOTHING TO UNDO"
+                );
+
+                return;
+
+            }
+
+
+            console.log(
+                "UNDO PERFORMED"
+            );
+
+
+            connection.undoManager.undo();
+
+        };
+
+
+    // =========================================
+    // REDO
+    // =========================================
+
+    const handleRedo =
+        () => {
+
+            const connection =
+                yjsRef.current;
+
+
+            if (
+                !connection
+            ) {
+
+                console.log(
+                    "YJS CONNECTION NOT AVAILABLE"
+                );
+
+                return;
+
+            }
+
+
+            if (
+                !connection.undoManager.canRedo()
+            ) {
+
+                console.log(
+                    "NOTHING TO REDO"
+                );
+
+                return;
+
+            }
+
+
+            console.log(
+                "REDO PERFORMED"
+            );
+
+
+            connection.undoManager.redo();
+
+        };
+
+
+    // =========================================
     // LOADING
     // =========================================
 
-    if (loading) {
+    if (
+        loading
+    ) {
 
         return (
+
             <h2>
                 Loading document...
             </h2>
+
         );
 
     }
@@ -1003,12 +1223,16 @@ function Editor() {
     // DOCUMENT NOT FOUND
     // =========================================
 
-    if (!document) {
+    if (
+        !document
+    ) {
 
         return (
+
             <h2>
                 Document not found
             </h2>
+
         );
 
     }
@@ -1022,9 +1246,14 @@ function Editor() {
 
         <div
             style={{
-                maxWidth: "900px",
-                margin: "0 auto",
-                padding: "20px"
+                maxWidth:
+                    "900px",
+
+                margin:
+                    "0 auto",
+
+                padding:
+                    "20px"
             }}
         >
 
@@ -1038,15 +1267,22 @@ function Editor() {
 
 
             {/* ================================= */}
-            {/* ADD BLOCK BUTTONS */}
+            {/* BUTTONS */}
             {/* ================================= */}
 
             <div
                 style={{
-                    display: "flex",
-                    gap: "10px",
-                    marginBottom: "20px",
-                    flexWrap: "wrap"
+                    display:
+                        "flex",
+
+                    gap:
+                        "10px",
+
+                    marginBottom:
+                        "20px",
+
+                    flexWrap:
+                        "wrap"
                 }}
             >
 
@@ -1092,14 +1328,21 @@ function Editor() {
                 >
                     + Bullet
                 </button>
+
+
                 <button
-                    onClick={handleUndo}
+                    onClick={
+                        handleUndo
+                    }
                 >
                     ↶ Undo
                 </button>
 
+
                 <button
-                    onClick={handleRedo}
+                    onClick={
+                        handleRedo
+                    }
                 >
                     ↷ Redo
                 </button>
@@ -1113,12 +1356,23 @@ function Editor() {
 
             <div
                 style={{
-                    marginBottom: "20px",
-                    padding: "10px",
-                    background: "#1f2937",
-                    color: "white",
-                    borderRadius: "8px",
-                    width: "fit-content"
+                    marginBottom:
+                        "20px",
+
+                    padding:
+                        "10px",
+
+                    background:
+                        "#1f2937",
+
+                    color:
+                        "white",
+
+                    borderRadius:
+                        "8px",
+
+                    width:
+                        "fit-content"
                 }}
             >
 
@@ -1137,11 +1391,20 @@ function Editor() {
 
             <div
                 style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    marginBottom: "20px",
-                    flexWrap: "wrap"
+                    display:
+                        "flex",
+
+                    alignItems:
+                        "center",
+
+                    gap:
+                        "8px",
+
+                    marginBottom:
+                        "20px",
+
+                    flexWrap:
+                        "wrap"
                 }}
             >
 
@@ -1151,13 +1414,17 @@ function Editor() {
 
 
                 {onlineUsers.map(
-                    (user, index) => (
+                    (
+                        user,
+                        index
+                    ) => (
 
                         <span
                             key={
                                 user.name +
                                 index
                             }
+
                             style={{
                                 padding:
                                     "5px 10px",
@@ -1174,6 +1441,7 @@ function Editor() {
                         >
 
                             🟢{" "}
+
                             {user.name}
 
                         </span>
@@ -1189,7 +1457,9 @@ function Editor() {
             {/* ================================= */}
 
             {document.blocks.map(
-                (block) => {
+                (
+                    block
+                ) => {
 
                     const yBlock =
                         yjsRef.current
@@ -1202,6 +1472,7 @@ function Editor() {
                     return (
 
                         <EditableBlock
+
                             key={
                                 block._id
                             }
@@ -1232,7 +1503,7 @@ function Editor() {
 
                             editingUsers={
                                 activeUsers[
-                                block._id
+                                    block._id
                                 ] || []
                             }
 

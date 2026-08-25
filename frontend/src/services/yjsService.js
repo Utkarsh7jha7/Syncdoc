@@ -6,10 +6,15 @@ export const createYjsConnection = (
     currentUser
 ) => {
 
+    // =========================================
+    // YJS DOCUMENT
+    // =========================================
+
     const ydoc = new Y.Doc();
 
     const blocks =
         ydoc.getMap("blocks");
+
 
     // =========================================
     // AWARENESS
@@ -28,6 +33,86 @@ export const createYjsConnection = (
         editingBlock: null
     });
 
+
+    // =========================================
+    // UNDO / REDO
+    // =========================================
+    //
+    // We need at least ONE YJS type when
+    // creating UndoManager.
+    //
+    // This dummy Y.Text is only used as the
+    // initial scope.
+    //
+    // Actual block Y.Text objects are added
+    // later using addToScope().
+    // =========================================
+
+    const undoRoot =
+        ydoc.getText(
+            "__undo_root__"
+        );
+
+
+    const undoManager =
+        new Y.UndoManager(
+            undoRoot,
+            {
+                captureTimeout: 500,
+
+                trackedOrigins:
+                    new Set([
+                        "local"
+                    ])
+            }
+        );
+
+
+    // =========================================
+    // REGISTER TEXT WITH UNDO MANAGER
+    // =========================================
+
+    const registeredTexts =
+        new Set();
+
+
+    const registerTextForUndo = (
+        yText
+    ) => {
+
+        if (!yText) {
+            return;
+        }
+
+
+        if (
+            registeredTexts.has(
+                yText
+            )
+        ) {
+
+            return;
+
+        }
+
+
+        registeredTexts.add(
+            yText
+        );
+
+
+        undoManager.addToScope(
+            yText
+        );
+
+
+        console.log(
+            "TEXT REGISTERED FOR UNDO"
+        );
+
+    };
+
+
     // =========================================
     // WEBSOCKET
     // =========================================
@@ -40,9 +125,11 @@ export const createYjsConnection = (
     socket.binaryType =
         "arraybuffer";
 
+
     let connected = false;
 
     const pendingMessages = [];
+
 
     // =========================================
     // YJS UPDATE
@@ -50,23 +137,37 @@ export const createYjsConnection = (
 
     ydoc.on(
         "update",
-        (update, origin) => {
+        (
+            update,
+            origin
+        ) => {
 
-            if (origin === "remote") {
+            // Remote updates came from the
+            // collaboration server.
+            if (
+                origin === "remote"
+            ) {
+
                 return;
+
             }
+
 
             const message =
                 new Uint8Array(
                     update.length + 1
                 );
 
+
+            // 0 = YJS update
             message[0] = 0;
+
 
             message.set(
                 update,
                 1
             );
+
 
             if (
                 connected &&
@@ -74,7 +175,9 @@ export const createYjsConnection = (
                     WebSocket.OPEN
             ) {
 
-                socket.send(message);
+                socket.send(
+                    message
+                );
 
             } else {
 
@@ -86,6 +189,7 @@ export const createYjsConnection = (
 
         }
     );
+
 
     // =========================================
     // AWARENESS UPDATE
@@ -105,6 +209,7 @@ export const createYjsConnection = (
                 ...removed
             ];
 
+
             if (
                 clients.length === 0
             ) {
@@ -113,6 +218,7 @@ export const createYjsConnection = (
 
             }
 
+
             const update =
                 awarenessProtocol
                     .encodeAwarenessUpdate(
@@ -120,17 +226,22 @@ export const createYjsConnection = (
                         clients
                     );
 
+
             const message =
                 new Uint8Array(
                     update.length + 1
                 );
 
+
+            // 1 = Awareness update
             message[0] = 1;
+
 
             message.set(
                 update,
                 1
             );
+
 
             if (
                 connected &&
@@ -138,12 +249,15 @@ export const createYjsConnection = (
                     WebSocket.OPEN
             ) {
 
-                socket.send(message);
+                socket.send(
+                    message
+                );
 
             }
 
         }
     );
+
 
     // =========================================
     // RECEIVE MESSAGE
@@ -158,6 +272,7 @@ export const createYjsConnection = (
                 event.data
             );
 
+
         if (
             message.length === 0
         ) {
@@ -166,17 +281,22 @@ export const createYjsConnection = (
 
         }
 
+
         const type =
             message[0];
 
+
         const data =
             message.slice(1);
+
 
         // =====================================
         // YJS UPDATE
         // =====================================
 
-        if (type === 0) {
+        if (
+            type === 0
+        ) {
 
             Y.applyUpdate(
                 ydoc,
@@ -186,11 +306,14 @@ export const createYjsConnection = (
 
         }
 
+
         // =====================================
         // AWARENESS UPDATE
         // =====================================
 
-        if (type === 1) {
+        if (
+            type === 1
+        ) {
 
             awarenessProtocol
                 .applyAwarenessUpdate(
@@ -203,17 +326,24 @@ export const createYjsConnection = (
 
     };
 
+
     // =========================================
-    // CONNECTED
+    // CONNECTION OPEN
     // =========================================
 
     socket.onopen = () => {
 
         connected = true;
 
+
         console.log(
             "CONNECTED TO COLLABORATION SERVER"
         );
+
+
+        // -------------------------------------
+        // SEND PENDING YJS UPDATES
+        // -------------------------------------
 
         while (
             pendingMessages.length > 0
@@ -222,11 +352,18 @@ export const createYjsConnection = (
             const message =
                 pendingMessages.shift();
 
-            socket.send(message);
+
+            socket.send(
+                message
+            );
 
         }
 
-        // Send initial awareness
+
+        // -------------------------------------
+        // SEND INITIAL AWARENESS
+        // -------------------------------------
+
         const awarenessUpdate =
             awarenessProtocol
                 .encodeAwarenessUpdate(
@@ -236,57 +373,48 @@ export const createYjsConnection = (
                     ]
                 );
 
+
         const message =
             new Uint8Array(
                 awarenessUpdate.length + 1
             );
 
+
         message[0] = 1;
+
 
         message.set(
             awarenessUpdate,
             1
         );
 
-        socket.send(message);
 
-    };
-
-    // =========================================
-    // DISCONNECT
-    // =========================================
-
-    const destroy = () => {
-
-        console.log(
-            "DESTROYING YJS CONNECTION"
+        socket.send(
+            message
         );
 
-        // Clear our awareness state
-        awareness.setLocalState(null);
-
-        if (
-            socket.readyState ===
-            WebSocket.OPEN
-        ) {
-
-            socket.close();
-
-        }
-
-        ydoc.destroy();
-
     };
+
+
+    // =========================================
+    // SOCKET CLOSE
+    // =========================================
 
     socket.onclose = () => {
 
         connected = false;
+
 
         console.log(
             "DISCONNECTED FROM SERVER"
         );
 
     };
+
+
+    // =========================================
+    // SOCKET ERROR
+    // =========================================
 
     socket.onerror = (
         error
@@ -299,14 +427,62 @@ export const createYjsConnection = (
 
     };
 
-    const undoManager = new Y.UndoManager(blocks);
 
-return {
-    ydoc,
-    blocks,
-    socket,
-    awareness,
-    undoManager
-};
+    // =========================================
+    // DESTROY
+    // =========================================
+
+    const destroy = () => {
+
+        console.log(
+            "DESTROYING YJS CONNECTION"
+        );
+
+
+        // Clear awareness
+        awareness.setLocalState(
+            null
+        );
+
+
+        if (
+            socket.readyState ===
+            WebSocket.OPEN
+        ) {
+
+            socket.close();
+
+        }
+
+
+        undoManager.destroy();
+
+
+        ydoc.destroy();
+
+    };
+
+
+    // =========================================
+    // RETURN
+    // =========================================
+
+    return {
+
+        ydoc,
+
+        blocks,
+
+        socket,
+
+        awareness,
+
+        undoManager,
+
+        registerTextForUndo,
+
+        destroy
+
+    };
 
 };

@@ -1,4 +1,8 @@
-import { useEffect, useState } from "react";
+import {
+    useEffect,
+    useState
+} from "react";
+
 
 function EditableBlock({
     block,
@@ -10,9 +14,22 @@ function EditableBlock({
     editingUsers = []
 }) {
 
-    const yText = yBlock?.get("content");
+    // =========================================
+    // YJS TEXT
+    // =========================================
 
-    const [content, setContent] = useState(
+    const yText =
+        yBlock?.get("content");
+
+
+    // =========================================
+    // LOCAL CONTENT STATE
+    // =========================================
+
+    const [
+        content,
+        setContent
+    ] = useState(
         yText
             ? yText.toString()
             : block.content || ""
@@ -20,7 +37,29 @@ function EditableBlock({
 
 
     // =========================================
-    // LISTEN FOR REMOTE YJS CHANGES
+    // UPDATE LOCAL STATE WHEN BLOCK CHANGES
+    // =========================================
+
+    useEffect(() => {
+
+        const currentText =
+            yText
+                ? yText.toString()
+                : block.content || "";
+
+
+        setContent(
+            currentText
+        );
+
+    }, [
+        block._id,
+        yText
+    ]);
+
+
+    // =========================================
+    // LISTEN FOR REMOTE / UNDO / REDO CHANGES
     // =========================================
 
     useEffect(() => {
@@ -29,37 +68,15 @@ function EditableBlock({
             return;
         }
 
-        const handleYjsChange = (event) => {
 
-            /*
-             * Ignore the change caused by our own
-             * local typing because React has already
-             * updated the textarea.
-             */
-
-            if (event.transaction.local) {
-                return;
-            }
+        const handleYjsChange = () => {
 
             const newContent =
                 yText.toString();
 
-            console.log(
-                "REMOTE CHANGE:",
-                block._id,
+
+            setContent(
                 newContent
-            );
-
-            setContent(newContent);
-
-            /*
-             * Update Mongo/React state with the
-             * merged Yjs result.
-             */
-            onChange(
-                block._id,
-                newContent,
-                true
             );
 
         };
@@ -78,142 +95,147 @@ function EditableBlock({
 
         };
 
-    }, [yText, block._id]);
+    }, [
+        yText
+    ]);
 
 
     // =========================================
-    // HANDLE USER TYPING
+    // HANDLE TEXT CHANGE
     // =========================================
 
-    const handleChange = (event) => {
+    const handleChange = (
+        event
+    ) => {
 
         const newContent =
             event.target.value;
 
 
-        /*
-         * Update UI immediately.
-         */
+        // =====================================
+        // UPDATE YJS
+        // =====================================
+
+        if (yText) {
+
+            const oldContent =
+                yText.toString();
+
+
+            // ---------------------------------
+            // FIND COMMON PREFIX
+            // ---------------------------------
+
+            let start = 0;
+
+
+            while (
+                start <
+                    oldContent.length &&
+                start <
+                    newContent.length &&
+                oldContent[start] ===
+                    newContent[start]
+            ) {
+
+                start++;
+
+            }
+
+
+            // ---------------------------------
+            // FIND COMMON SUFFIX
+            // ---------------------------------
+
+            let oldEnd =
+                oldContent.length;
+
+
+            let newEnd =
+                newContent.length;
+
+
+            while (
+                oldEnd > start &&
+                newEnd > start &&
+                oldContent[
+                    oldEnd - 1
+                ] ===
+                    newContent[
+                        newEnd - 1
+                    ]
+            ) {
+
+                oldEnd--;
+
+                newEnd--;
+
+            }
+
+
+            // ---------------------------------
+            // CALCULATE CHANGE
+            // ---------------------------------
+
+            const deleteLength =
+                oldEnd - start;
+
+
+            const insertedText =
+                newContent.slice(
+                    start,
+                    newEnd
+                );
+
+
+            // =================================
+            // LOCAL TRANSACTION
+            // =================================
+            //
+            // IMPORTANT:
+            // "local" is the origin tracked
+            // by our UndoManager.
+            // =================================
+
+            yText.doc.transact(
+                () => {
+
+                    if (
+                        deleteLength > 0
+                    ) {
+
+                        yText.delete(
+                            start,
+                            deleteLength
+                        );
+
+                    }
+
+
+                    if (
+                        insertedText.length > 0
+                    ) {
+
+                        yText.insert(
+                            start,
+                            insertedText
+                        );
+
+                    }
+
+                },
+                "local"
+            );
+
+        }
+
+
+        // =====================================
+        // UPDATE REACT STATE
+        // =====================================
+
         setContent(
             newContent
-        );
-
-
-        if (!yText) {
-
-            onChange(
-                block._id,
-                newContent
-            );
-
-            return;
-
-        }
-
-
-        const oldContent =
-            yText.toString();
-
-
-        // =====================================
-        // FIND COMMON PREFIX
-        // =====================================
-
-        let start = 0;
-
-
-        while (
-            start < oldContent.length &&
-            start < newContent.length &&
-            oldContent[start] ===
-                newContent[start]
-        ) {
-
-            start++;
-
-        }
-
-
-        // =====================================
-        // FIND COMMON SUFFIX
-        // =====================================
-
-        let oldEnd =
-            oldContent.length;
-
-        let newEnd =
-            newContent.length;
-
-
-        while (
-            oldEnd > start &&
-            newEnd > start &&
-            oldContent[oldEnd - 1] ===
-                newContent[newEnd - 1]
-        ) {
-
-            oldEnd--;
-
-            newEnd--;
-
-        }
-
-
-        const deleteLength =
-            oldEnd - start;
-
-
-        const insertedText =
-            newContent.slice(
-                start,
-                newEnd
-            );
-
-
-        console.log(
-            "LOCAL YJS EDIT:",
-            {
-                blockId: block._id,
-                oldContent,
-                newContent,
-                start,
-                deleteLength,
-                insertedText
-            }
-        );
-
-
-        // =====================================
-        // APPLY CRDT UPDATE
-        // =====================================
-
-        yText.doc.transact(
-            () => {
-
-                if (
-                    deleteLength > 0
-                ) {
-
-                    yText.delete(
-                        start,
-                        deleteLength
-                    );
-
-                }
-
-
-                if (
-                    insertedText.length > 0
-                ) {
-
-                    yText.insert(
-                        start,
-                        insertedText
-                    );
-
-                }
-
-            }
         );
 
 
@@ -236,35 +258,56 @@ function EditableBlock({
     const editingIndicator =
         editingUsers.length > 0
             ? (
+
                 <div
                     style={{
-                        marginBottom: "6px",
-                        padding: "5px 10px",
-                        color: "#22c55e",
-                        fontSize: "13px",
-                        fontWeight: "bold",
-                        background: "#111827",
-                        borderRadius: "6px",
-                        width: "fit-content"
+                        marginBottom:
+                            "6px",
+
+                        padding:
+                            "6px 10px",
+
+                        color:
+                            "#22c55e",
+
+                        fontSize:
+                            "13px",
+
+                        fontWeight:
+                            "bold",
+
+                        background:
+                            "#111827",
+
+                        borderRadius:
+                            "6px",
+
+                        width:
+                            "fit-content"
                     }}
                 >
 
-                    ✏️{" "}
+                    🟢{" "}
 
                     {editingUsers
                         .map(
                             (user) =>
-                                user.name
+                                typeof user ===
+                                "string"
+                                    ? user
+                                    : user.name
                         )
                         .join(", ")}
 
                     {" "}
 
-                    {editingUsers.length === 1
+                    {editingUsers.length ===
+                    1
                         ? "is editing this block"
                         : "are editing this block"}
 
                 </div>
+
             )
             : null;
 
@@ -275,7 +318,8 @@ function EditableBlock({
 
     const commonProps = {
 
-        value: content,
+        value:
+            content,
 
         onChange:
             handleChange,
@@ -298,17 +342,23 @@ function EditableBlock({
 
         style: {
 
-            width: "100%",
+            width:
+                "100%",
 
-            padding: "10px",
+            padding:
+                "10px",
 
-            color: "white",
+            color:
+                "white",
 
-            borderRadius: "8px",
+            borderRadius:
+                "8px",
 
-            resize: "vertical",
+            resize:
+                "vertical",
 
-            outline: "none"
+            outline:
+                "none"
 
         }
 
@@ -329,16 +379,31 @@ function EditableBlock({
             }
 
             style={{
-                marginBottom: "5px",
-                padding: "5px 10px",
-                background: "#dc2626",
-                color: "white",
-                border: "none",
-                borderRadius: "5px",
-                cursor: "pointer"
+                marginBottom:
+                    "5px",
+
+                padding:
+                    "5px 10px",
+
+                background:
+                    "#dc2626",
+
+                color:
+                    "white",
+
+                border:
+                    "none",
+
+                borderRadius:
+                    "5px",
+
+                cursor:
+                    "pointer"
             }}
         >
+
             Delete
+
         </button>
 
     );
@@ -349,20 +414,23 @@ function EditableBlock({
     // =========================================
 
     if (
-        block.type === "heading"
+        block.type ===
+        "heading"
     ) {
 
         return (
 
             <div
                 style={{
-                    marginBottom: "15px"
+                    marginBottom:
+                        "15px"
                 }}
             >
 
                 {editingIndicator}
 
                 {deleteButton}
+
 
                 <textarea
                     {...commonProps}
@@ -376,8 +444,8 @@ function EditableBlock({
                             block.level === 1
                                 ? "30px"
                                 : block.level === 3
-                                ? "22px"
-                                : "26px",
+                                    ? "22px"
+                                    : "26px",
 
                         fontWeight:
                             "bold",
@@ -398,18 +466,20 @@ function EditableBlock({
 
 
     // =========================================
-    // CODE BLOCK
+    // CODE
     // =========================================
 
     if (
-        block.type === "code"
+        block.type ===
+        "code"
     ) {
 
         return (
 
             <div
                 style={{
-                    marginBottom: "15px"
+                    marginBottom:
+                        "15px"
                 }}
             >
 
@@ -417,12 +487,15 @@ function EditableBlock({
 
                 {deleteButton}
 
+
                 <textarea
                     {...commonProps}
 
                     rows={6}
 
-                    spellCheck={false}
+                    spellCheck={
+                        false
+                    }
 
                     style={{
                         ...commonProps.style,
@@ -456,14 +529,16 @@ function EditableBlock({
     // =========================================
 
     if (
-        block.type === "bullet"
+        block.type ===
+        "bullet"
     ) {
 
         return (
 
             <div
                 style={{
-                    marginBottom: "10px"
+                    marginBottom:
+                        "10px"
                 }}
             >
 
@@ -471,9 +546,12 @@ function EditableBlock({
 
                 {deleteButton}
 
+
                 <div
                     style={{
-                        display: "flex",
+                        display:
+                            "flex",
+
                         alignItems:
                             "flex-start"
                     }}
@@ -481,13 +559,21 @@ function EditableBlock({
 
                     <span
                         style={{
-                            color: "white",
-                            fontSize: "20px",
-                            marginRight: "10px"
+                            color:
+                                "white",
+
+                            fontSize:
+                                "20px",
+
+                            marginRight:
+                                "10px"
                         }}
                     >
+
                         •
+
                     </span>
+
 
                     <textarea
                         {...commonProps}
@@ -522,13 +608,15 @@ function EditableBlock({
 
         <div
             style={{
-                marginBottom: "15px"
+                marginBottom:
+                    "15px"
             }}
         >
 
             {editingIndicator}
 
             {deleteButton}
+
 
             <textarea
                 {...commonProps}
@@ -557,4 +645,3 @@ function EditableBlock({
 
 
 export default EditableBlock;
-
