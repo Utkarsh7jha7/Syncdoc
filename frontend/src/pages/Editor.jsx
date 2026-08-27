@@ -2,7 +2,8 @@ import {
     getDocument,
     updateBlock,
     createBlock,
-    deleteBlock
+    deleteBlock,
+    reorderBlocks
 } from "../services/documentService";
 
 import EditableBlock
@@ -72,6 +73,8 @@ function Editor() {
         activeUsers,
         setActiveUsers
     ] = useState({});
+
+    const [draggedBlockId, setDraggedBlockId] = useState(null);
 
 
     // =========================================
@@ -247,7 +250,7 @@ function Editor() {
 
                                     if (
                                         !editing[
-                                            user.editingBlock
+                                        user.editingBlock
                                         ]
                                     ) {
 
@@ -606,7 +609,7 @@ function Editor() {
 
 
                 } catch (
-                    error
+                error
                 ) {
 
                     console.error(
@@ -701,22 +704,14 @@ function Editor() {
             try {
 
                 const blockData = {
-
                     type,
-
-                    content:
-                        "",
-
-                    level:
-                        type === "heading"
-                            ? 2
-                            : 0,
-
+                    content: "",
+                    level: type === "heading" ? 2 : 0,
                     language:
                         type === "code"
                             ? "javascript"
-                            : null
-
+                            : null,
+                    documentId: DOCUMENT_ID
                 };
 
 
@@ -817,7 +812,7 @@ function Editor() {
                 );
 
             } catch (
-                error
+            error
             ) {
 
                 console.error(
@@ -881,7 +876,7 @@ function Editor() {
                 );
 
             } catch (
-                error
+            error
             ) {
 
                 console.error(
@@ -892,6 +887,185 @@ function Editor() {
             }
 
         };
+
+
+    // =========================================
+    // DRAG START
+    // =========================================
+
+    const handleDragStart = (
+        event,
+        blockId
+    ) => {
+
+        setDraggedBlockId(
+            blockId
+        );
+
+        event.dataTransfer.effectAllowed =
+            "move";
+
+        event.dataTransfer.setData(
+            "text/plain",
+            blockId
+        );
+
+    };
+
+
+    // =========================================
+    // DRAG OVER
+    // =========================================
+
+    const handleDragOver = (
+        event
+    ) => {
+
+        event.preventDefault();
+
+        event.dataTransfer.dropEffect =
+            "move";
+
+    };
+
+
+    // =========================================
+    // DROP BLOCK
+    // =========================================
+
+    const handleDrop = async (
+        event,
+        targetBlockId
+    ) => {
+
+        event.preventDefault();
+
+        const sourceBlockId =
+            event.dataTransfer.getData(
+                "text/plain"
+            );
+
+
+        if (
+            !sourceBlockId ||
+            sourceBlockId === targetBlockId
+        ) {
+
+            setDraggedBlockId(null);
+
+            return;
+
+        }
+
+
+        const currentBlocks =
+            document.blocks;
+
+
+        const sourceIndex =
+            currentBlocks.findIndex(
+                (block) =>
+                    block._id ===
+                    sourceBlockId
+            );
+
+
+        const targetIndex =
+            currentBlocks.findIndex(
+                (block) =>
+                    block._id ===
+                    targetBlockId
+            );
+
+
+        if (
+            sourceIndex === -1 ||
+            targetIndex === -1
+        ) {
+
+            setDraggedBlockId(null);
+
+            return;
+
+        }
+
+
+        // -----------------------------------------
+        // CREATE NEW ORDER
+        // -----------------------------------------
+
+        const reorderedBlocks =
+            [...currentBlocks];
+
+
+        const [
+            movedBlock
+        ] =
+            reorderedBlocks.splice(
+                sourceIndex,
+                1
+            );
+
+
+        reorderedBlocks.splice(
+            targetIndex,
+            0,
+            movedBlock
+        );
+
+
+        // -----------------------------------------
+        // UPDATE UI IMMEDIATELY
+        // -----------------------------------------
+
+        setDocument(
+            (previousDocument) => ({
+
+                ...previousDocument,
+
+                blocks:
+                    reorderedBlocks
+
+            })
+        );
+
+
+        setDraggedBlockId(null);
+
+
+        // -----------------------------------------
+        // SAVE ORDER TO MONGODB
+        // -----------------------------------------
+
+        try {
+
+            await reorderBlocks(
+
+                DOCUMENT_ID,
+
+                reorderedBlocks.map(
+                    (block) =>
+                        block._id
+                )
+
+            );
+
+
+            console.log(
+                "BLOCK ORDER SAVED"
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                "FAILED TO SAVE BLOCK ORDER:",
+                error
+            );
+
+        }
+
+    };
 
 
     // =========================================
@@ -1053,13 +1227,13 @@ function Editor() {
 
             if (
                 saveTimers.current[
-                    blockId
+                blockId
                 ]
             ) {
 
                 clearTimeout(
                     saveTimers.current[
-                        blockId
+                    blockId
                     ]
                 );
 
@@ -1089,7 +1263,7 @@ function Editor() {
                         );
 
                     } catch (
-                        error
+                    error
                     ) {
 
                         console.error(
@@ -1473,6 +1647,28 @@ function Editor() {
 
                         <EditableBlock
 
+                            draggable={true}
+
+                            onDragStart={
+                                (event) =>
+                                    handleDragStart(
+                                        event,
+                                        block._id
+                                    )
+                            }
+
+                            onDragOver={
+                                handleDragOver
+                            }
+
+                            onDrop={
+                                (event) =>
+                                    handleDrop(
+                                        event,
+                                        block._id
+                                    )
+                            }
+
                             key={
                                 block._id
                             }
@@ -1503,7 +1699,7 @@ function Editor() {
 
                             editingUsers={
                                 activeUsers[
-                                    block._id
+                                block._id
                                 ] || []
                             }
 

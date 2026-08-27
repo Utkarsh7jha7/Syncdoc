@@ -4,7 +4,8 @@ import {
     getDocuments,
     getDocument,
     deleteDocument,
-    addBlockToDocument
+    addBlockToDocument,
+    reorderBlocks
 } from "../controllers/documentController.js";
 
 
@@ -17,6 +18,15 @@ router.get("/", getDocuments);
 router.get("/:id", getDocument);
 
 router.delete("/:id", deleteDocument);
-router.post("/:documentId/blocks", addBlockToDocument);
+
+router.post(
+    "/:documentId/blocks",
+    addBlockToDocument
+);
+
+router.put(
+    "/:documentId/reorder",
+    reorderBlocks
+);
 
 export default router;

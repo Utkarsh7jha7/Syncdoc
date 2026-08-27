@@ -275,6 +275,48 @@ export const deleteBlock = async (
     return data;
 };
 
+// =========================================
+// REORDER BLOCKS
+// =========================================
+
+export const reorderBlocks = async (
+    documentId,
+    blockIds
+) => {
+
+    const response = await fetch(
+        `http://localhost:5000/api/documents/${documentId}/reorder`,
+        {
+            method: "PUT",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+                blockIds
+            })
+        }
+    );
+
+    if (!response.ok) {
+
+        const errorData =
+            await response.json().catch(() => ({}));
+
+        console.error(
+            "REORDER BLOCKS FAILED:",
+            errorData
+        );
+
+        throw new Error(
+            `Failed to reorder blocks (${response.status})`
+        );
+    }
+
+    return response.json();
+};
+
 
 // =========================================
 // DELETE DOCUMENT

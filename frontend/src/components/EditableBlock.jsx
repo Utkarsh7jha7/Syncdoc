@@ -3,7 +3,6 @@ import {
     useState
 } from "react";
 
-
 function EditableBlock({
     block,
     yBlock,
@@ -11,7 +10,11 @@ function EditableBlock({
     onFocus,
     onBlur,
     onDelete,
-    editingUsers = []
+    editingUsers = [],
+    draggable = false,
+    onDragStart,
+    onDragOver,
+    onDrop
 }) {
 
     // =========================================
@@ -190,11 +193,6 @@ function EditableBlock({
 
             // =================================
             // LOCAL TRANSACTION
-            // =================================
-            //
-            // IMPORTANT:
-            // "local" is the origin tracked
-            // by our UndoManager.
             // =================================
 
             yText.doc.transact(
@@ -421,6 +419,10 @@ function EditableBlock({
         return (
 
             <div
+                draggable={draggable}
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDrop={onDrop}
                 style={{
                     marginBottom:
                         "15px"
@@ -477,6 +479,10 @@ function EditableBlock({
         return (
 
             <div
+                draggable={draggable}
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDrop={onDrop}
                 style={{
                     marginBottom:
                         "15px"
@@ -536,6 +542,10 @@ function EditableBlock({
         return (
 
             <div
+                draggable={draggable}
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDrop={onDrop}
                 style={{
                     marginBottom:
                         "10px"
@@ -607,6 +617,10 @@ function EditableBlock({
     return (
 
         <div
+            draggable={draggable}
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
             style={{
                 marginBottom:
                     "15px"
