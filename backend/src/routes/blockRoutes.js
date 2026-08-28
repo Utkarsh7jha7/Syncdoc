@@ -1,9 +1,9 @@
 import express from "express";
-
 import {
     createBlock,
     updateBlock,
-    deleteBlock
+    deleteBlock,
+    updateBlockChildren
 } from "../controllers/blockController.js";
 
 const router = express.Router();
@@ -20,6 +20,10 @@ router.post(
 router.put(
     "/:blockId",
     updateBlock
+);
+router.put(
+    "/:blockId/children",
+    updateBlockChildren
 );
 
 

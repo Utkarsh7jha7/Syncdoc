@@ -355,3 +355,40 @@ export const deleteDocument = async (
 
     return data;
 };
+export const updateBlockChildren = async (
+    blockId,
+    children
+) => {
+
+    const response =
+        await fetch(
+            `http://localhost:5000/api/blocks/${blockId}/children`,
+            {
+                method: "PUT",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
+
+                body: JSON.stringify({
+                    children
+                })
+            }
+        );
+
+    const data =
+        await response.json();
+
+    if (!response.ok) {
+
+        throw new Error(
+            data.message ||
+            "Failed to update block children"
+        );
+
+    }
+
+    return data;
+
+};

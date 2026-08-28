@@ -515,3 +515,57 @@ export const deleteBlock = async (req, res) => {
     }
 
 };
+// =========================================
+// UPDATE BLOCK CHILDREN
+// =========================================
+
+export const updateBlockChildren = async (req, res) => {
+
+    try {
+
+        const { blockId } = req.params;
+
+        const { children = [] } = req.body;
+
+        const block =
+            await Block.findByIdAndUpdate(
+                blockId,
+                {
+                    children
+                },
+                {
+                    new: true,
+                    runValidators: true
+                }
+            );
+
+        if (!block) {
+
+            return res.status(404).json({
+                success: false,
+                message: "Block not found"
+            });
+
+        }
+
+        res.status(200).json({
+            success: true,
+            block
+        });
+
+    } catch (error) {
+
+        console.error(
+            "UPDATE BLOCK CHILDREN ERROR:",
+            error
+        );
+
+        res.status(500).json({
+            success: false,
+            message: "Failed to update block children",
+            error: error.message
+        });
+
+    }
+
+};

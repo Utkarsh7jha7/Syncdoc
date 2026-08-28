@@ -3,7 +3,7 @@ import {
     updateBlock,
     createBlock,
     deleteBlock,
-    reorderBlocks
+    updateBlockChildren
 } from "../services/documentService";
 
 import EditableBlock
@@ -1067,6 +1067,118 @@ function Editor() {
 
     };
 
+    // =========================================
+    // ADD BLOCK AS CHILD
+    // =========================================
+
+    const handleAddChild = async (
+        parentId,
+        childId
+    ) => {
+
+        try {
+
+            const parentBlock =
+                document.blocks.find(
+                    (block) =>
+                        block._id === parentId
+                );
+
+            if (!parentBlock) {
+                return;
+            }
+
+            // Prevent block becoming its own child
+            if (parentId === childId) {
+                return;
+            }
+
+            const currentChildren =
+                parentBlock.children || [];
+
+            // Prevent duplicate child
+            if (
+                currentChildren.some(
+                    (child) =>
+                        String(
+                            typeof child === "object"
+                                ? child._id
+                                : child
+                        ) === String(childId)
+                )
+            ) {
+                return;
+            }
+
+            const updatedChildren = [
+                ...currentChildren.map(
+                    (child) =>
+                        typeof child === "object"
+                            ? child._id
+                            : child
+                ),
+                childId
+            ];
+
+            await updateBlockChildren(
+                parentId,
+                updatedChildren
+            );
+
+            // Update local document
+            setDocument(
+                (previousDocument) => {
+
+                    if (!previousDocument) {
+                        return previousDocument;
+                    }
+
+                    return {
+                        ...previousDocument,
+
+                        blocks:
+                            previousDocument.blocks.map(
+                                (block) => {
+
+                                    if (
+                                        block._id ===
+                                        parentId
+                                    ) {
+
+                                        return {
+                                            ...block,
+                                            children:
+                                                updatedChildren
+                                        };
+
+                                    }
+
+                                    return block;
+
+                                }
+                            )
+                    };
+
+                }
+            );
+
+            console.log(
+                "CHILD BLOCK ADDED:",
+                childId,
+                "TO:",
+                parentId
+            );
+
+        } catch (error) {
+
+            console.error(
+                "FAILED TO ADD CHILD BLOCK:",
+                error
+            );
+
+        }
+
+    };
 
     // =========================================
     // BLOCK FOCUS
@@ -1158,128 +1270,120 @@ function Editor() {
     // BLOCK CONTENT CHANGE
     // =========================================
 
-    const handleBlockChange =
-        (
-            blockId,
-            content
-        ) => {
+    const handleBlockChange = (blockId, content) => {
 
-            // =================================
-            // UPDATE REACT STATE
-            // =================================
+        // =========================================
+        // UPDATE REACT STATE
+        // =========================================
 
-            setDocument(
-                (
-                    previousDocument
-                ) => {
+        setDocument((previousDocument) => {
 
-                    if (
-                        !previousDocument
-                    ) {
+            if (!previousDocument) {
+                return previousDocument;
+            }
 
-                        return previousDocument;
+            return {
+                ...previousDocument,
 
+                blocks: previousDocument.blocks.map(
+                    (block) => {
+
+                        if (block._id === blockId) {
+
+                            return {
+                                ...block,
+                                content
+                            };
+
+                        }
+
+                        return block;
+
+                    }
+                )
+
+            };
+
+        });
+
+
+        // =========================================
+        // SAVE MERGED YJS CONTENT TO MONGODB
+        // =========================================
+
+        if (
+            saveTimers.current[blockId]
+        ) {
+
+            clearTimeout(
+                saveTimers.current[blockId]
+            );
+
+        }
+
+
+        saveTimers.current[blockId] =
+            setTimeout(async () => {
+
+                try {
+
+                    const connection =
+                        yjsRef.current;
+
+                    if (!connection) {
+                        return;
                     }
 
 
-                    return {
-
-                        ...previousDocument,
-
-                        blocks:
-                            previousDocument
-                                .blocks
-                                .map(
-                                    (
-                                        block
-                                    ) => {
-
-                                        if (
-                                            block._id ===
-                                            blockId
-                                        ) {
-
-                                            return {
-
-                                                ...block,
-
-                                                content
-
-                                            };
-
-                                        }
-
-
-                                        return block;
-
-                                    }
-                                )
-
-                    };
-
-                }
-            );
-
-
-            // =================================
-            // CLEAR OLD SAVE TIMER
-            // =================================
-
-            if (
-                saveTimers.current[
-                blockId
-                ]
-            ) {
-
-                clearTimeout(
-                    saveTimers.current[
-                    blockId
-                    ]
-                );
-
-            }
-
-
-            // =================================
-            // SAVE TO MONGODB
-            // =================================
-
-            saveTimers.current[
-                blockId
-            ] = setTimeout(
-                async () => {
-
-                    try {
-
-                        await updateBlock(
-                            blockId,
-                            content
-                        );
-
-
-                        console.log(
-                            "BLOCK SAVED:",
+                    const yBlock =
+                        connection.blocks.get(
                             blockId
                         );
 
-                    } catch (
-                    error
-                    ) {
-
-                        console.error(
-                            "FAILED TO SAVE BLOCK:",
-                            error
-                        );
-
+                    if (!yBlock) {
+                        return;
                     }
 
-                },
-                500
-            );
 
-        };
+                    const yText =
+                        yBlock.get("content");
+
+                    if (!yText) {
+                        return;
+                    }
 
 
+                    // IMPORTANT:
+                    // Read the FINAL merged Yjs value.
+                    const mergedContent =
+                        yText.toString();
+
+
+                    await updateBlock(
+                        blockId,
+                        mergedContent
+                    );
+
+
+                    console.log(
+                        "MERGED BLOCK SAVED:",
+                        blockId,
+                        mergedContent
+                    );
+
+
+                } catch (error) {
+
+                    console.error(
+                        "FAILED TO SAVE MERGED BLOCK:",
+                        error
+                    );
+
+                }
+
+            }, 500);
+
+    };
     // =========================================
     // UNDO
     // =========================================
@@ -1372,7 +1476,169 @@ function Editor() {
             connection.undoManager.redo();
 
         };
+        // =========================================
+// RENDER AST BLOCK
+// =========================================
 
+const renderBlock = (
+    block,
+    depth = 0
+) => {
+
+    const yBlock =
+        yjsRef.current
+            ?.blocks
+            .get(block._id);
+
+    return (
+
+        <div
+            key={block._id}
+            style={{
+                marginLeft:
+                    `${depth * 30}px`,
+
+                borderLeft:
+                    depth > 0
+                        ? "2px solid #374151"
+                        : "none",
+
+                paddingLeft:
+                    depth > 0
+                        ? "15px"
+                        : "0",
+
+                marginBottom:
+                    "10px"
+            }}
+        >
+
+            {/* ================================= */}
+            {/* CURRENT BLOCK */}
+            {/* ================================= */}
+
+            <EditableBlock
+
+                draggable={true}
+
+                onDragStart={
+                    (event) =>
+                        handleDragStart(
+                            event,
+                            block._id
+                        )
+                }
+
+                onDragOver={
+                    handleDragOver
+                }
+
+                onDrop={
+                    (event) =>
+                        handleDrop(
+                            event,
+                            block._id
+                        )
+                }
+
+                block={
+                    block
+                }
+
+                yBlock={
+                    yBlock
+                }
+
+                onChange={
+                    handleBlockChange
+                }
+
+                onFocus={
+                    handleBlockFocus
+                }
+
+                onBlur={
+                    handleBlockBlur
+                }
+
+                onDelete={
+                    handleDeleteBlock
+                }
+
+                editingUsers={
+                    activeUsers[
+                        block._id
+                    ] || []
+                }
+
+            />
+
+
+            {/* ================================= */}
+            {/* CHILD BLOCKS */}
+            {/* ================================= */}
+
+            {block.children &&
+             block.children.length > 0 && (
+
+                <div
+                    style={{
+                        marginTop:
+                            "10px"
+                    }}
+                >
+
+                    {block.children.map(
+                        (child) => {
+
+                            /*
+                             * populateAST() returns
+                             * complete child objects.
+                             *
+                             * But if only an ID exists,
+                             * find the block from the
+                             * document.
+                             */
+
+                            const childBlock =
+                                typeof child ===
+                                "object"
+
+                                    ? child
+
+                                    : document.blocks.find(
+                                        (item) =>
+                                            String(
+                                                item._id
+                                            ) ===
+                                            String(
+                                                child
+                                            )
+                                    );
+
+
+                            if (!childBlock) {
+                                return null;
+                            }
+
+
+                            return renderBlock(
+                                childBlock,
+                                depth + 1
+                            );
+
+                        }
+                    )}
+
+                </div>
+
+            )}
+
+        </div>
+
+    );
+
+};
 
     // =========================================
     // LOADING
@@ -1645,76 +1911,106 @@ function Editor() {
 
                     return (
 
-                        <EditableBlock
+                        <div
+                            key={block._id}
+                            style={{
+                                marginBottom: "15px"
+                            }}
+                        >
 
-                            draggable={true}
+                            <EditableBlock
 
-                            onDragStart={
-                                (event) =>
-                                    handleDragStart(
-                                        event,
-                                        block._id
-                                    )
-                            }
+                                draggable={true}
 
-                            onDragOver={
-                                handleDragOver
-                            }
+                                onDragStart={
+                                    (event) =>
+                                        handleDragStart(
+                                            event,
+                                            block._id
+                                        )
+                                }
 
-                            onDrop={
-                                (event) =>
-                                    handleDrop(
-                                        event,
-                                        block._id
-                                    )
-                            }
+                                onDragOver={
+                                    handleDragOver
+                                }
 
-                            key={
-                                block._id
-                            }
+                                onDrop={
+                                    (event) =>
+                                        handleDrop(
+                                            event,
+                                            block._id
+                                        )
+                                }
 
-                            block={
-                                block
-                            }
+                                block={
+                                    block
+                                }
 
-                            yBlock={
-                                yBlock
-                            }
+                                yBlock={
+                                    yBlock
+                                }
 
-                            onChange={
-                                handleBlockChange
-                            }
+                                onChange={
+                                    handleBlockChange
+                                }
 
-                            onFocus={
-                                handleBlockFocus
-                            }
+                                onFocus={
+                                    handleBlockFocus
+                                }
 
-                            onBlur={
-                                handleBlockBlur
-                            }
+                                onBlur={
+                                    handleBlockBlur
+                                }
 
-                            onDelete={
-                                handleDeleteBlock
-                            }
+                                onDelete={
+                                    handleDeleteBlock
+                                }
 
-                            editingUsers={
-                                activeUsers[
-                                block._id
-                                ] || []
-                            }
+                                editingUsers={
+                                    activeUsers[
+                                    block._id
+                                    ] || []
+                                }
 
-                        />
+                            />
 
+                            {/* ================================= */}
+                            {/* AST CHILD BUTTON */}
+                            {/* ================================= */}
+
+                            <button
+                                onClick={() => {
+                                    const child =
+                                        document.blocks.find(
+                                            (candidate) =>
+                                                candidate._id !==
+                                                block._id
+                                        );
+                                    if (child) {
+                                        handleAddChild(
+                                            block._id,
+                                            child._id
+                                        );
+                                    }
+                                }}
+                                style={{
+                                    marginTop: "5px",
+                                    marginBottom: "15px",
+                                    padding: "5px 10px",
+                                    background: "#2563eb",
+                                    color: "white",
+                                    border: "none",
+                                    borderRadius: "5px",
+                                    cursor: "pointer"
+                                }}
+                            >
+                                + Make another block a child
+                            </button>
+                        </div>
                     );
-
                 }
             )}
-
         </div>
-
     );
-
 }
-
-
 export default Editor;

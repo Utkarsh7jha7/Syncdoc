@@ -37,22 +37,11 @@ export const createYjsConnection = (
     // =========================================
     // UNDO / REDO
     // =========================================
-    //
-    // We need at least ONE YJS type when
-    // creating UndoManager.
-    //
-    // This dummy Y.Text is only used as the
-    // initial scope.
-    //
-    // Actual block Y.Text objects are added
-    // later using addToScope().
-    // =========================================
 
     const undoRoot =
         ydoc.getText(
             "__undo_root__"
         );
-
 
     const undoManager =
         new Y.UndoManager(
@@ -69,48 +58,41 @@ export const createYjsConnection = (
 
 
     // =========================================
-    // REGISTER TEXT WITH UNDO MANAGER
+    // REGISTER Y.TEXT FOR UNDO
     // =========================================
 
     const registeredTexts =
         new Set();
 
 
-    const registerTextForUndo = (
-        yText
-    ) => {
+    const registerTextForUndo =
+        (yText) => {
 
-        if (!yText) {
-            return;
-        }
+            if (!yText) {
+                return;
+            }
 
+            if (
+                registeredTexts.has(
+                    yText
+                )
+            ) {
+                return;
+            }
 
-        if (
-            registeredTexts.has(
+            registeredTexts.add(
                 yText
-            )
-        ) {
+            );
 
-            return;
+            undoManager.addToScope(
+                yText
+            );
 
-        }
-
-
-        registeredTexts.add(
-            yText
-        );
-
-
-        undoManager.addToScope(
-            yText
-        );
-
-
-        console.log(
-            "TEXT REGISTERED FOR UNDO"
-        );
-
-    };
+            console.log(
+                "TEXT REGISTERED FOR UNDO:",
+                yText.toString()
+            );
+        };
 
 
     // =========================================
@@ -124,7 +106,6 @@ export const createYjsConnection = (
 
     socket.binaryType =
         "arraybuffer";
-
 
     let connected = false;
 
@@ -142,26 +123,19 @@ export const createYjsConnection = (
             origin
         ) => {
 
-            // Remote updates came from the
-            // collaboration server.
             if (
                 origin === "remote"
             ) {
-
                 return;
-
             }
-
 
             const message =
                 new Uint8Array(
                     update.length + 1
                 );
 
-
             // 0 = YJS update
             message[0] = 0;
-
 
             message.set(
                 update,
@@ -209,15 +183,11 @@ export const createYjsConnection = (
                 ...removed
             ];
 
-
             if (
                 clients.length === 0
             ) {
-
                 return;
-
             }
-
 
             const update =
                 awarenessProtocol
@@ -226,16 +196,13 @@ export const createYjsConnection = (
                         clients
                     );
 
-
             const message =
                 new Uint8Array(
                     update.length + 1
                 );
 
-
-            // 1 = Awareness update
+            // 1 = Awareness
             message[0] = 1;
-
 
             message.set(
                 update,
@@ -272,19 +239,14 @@ export const createYjsConnection = (
                 event.data
             );
 
-
         if (
             message.length === 0
         ) {
-
             return;
-
         }
-
 
         const type =
             message[0];
-
 
         const data =
             message.slice(1);
@@ -335,14 +297,13 @@ export const createYjsConnection = (
 
         connected = true;
 
-
         console.log(
             "CONNECTED TO COLLABORATION SERVER"
         );
 
 
         // -------------------------------------
-        // SEND PENDING YJS UPDATES
+        // SEND PENDING UPDATES
         // -------------------------------------
 
         while (
@@ -352,7 +313,6 @@ export const createYjsConnection = (
             const message =
                 pendingMessages.shift();
 
-
             socket.send(
                 message
             );
@@ -361,7 +321,7 @@ export const createYjsConnection = (
 
 
         // -------------------------------------
-        // SEND INITIAL AWARENESS
+        // SEND AWARENESS
         // -------------------------------------
 
         const awarenessUpdate =
@@ -373,21 +333,17 @@ export const createYjsConnection = (
                     ]
                 );
 
-
         const message =
             new Uint8Array(
                 awarenessUpdate.length + 1
             );
 
-
         message[0] = 1;
-
 
         message.set(
             awarenessUpdate,
             1
         );
-
 
         socket.send(
             message
@@ -403,7 +359,6 @@ export const createYjsConnection = (
     socket.onclose = () => {
 
         connected = false;
-
 
         console.log(
             "DISCONNECTED FROM SERVER"
@@ -438,8 +393,6 @@ export const createYjsConnection = (
             "DESTROYING YJS CONNECTION"
         );
 
-
-        // Clear awareness
         awareness.setLocalState(
             null
         );
@@ -447,7 +400,9 @@ export const createYjsConnection = (
 
         if (
             socket.readyState ===
-            WebSocket.OPEN
+                WebSocket.OPEN ||
+            socket.readyState ===
+                WebSocket.CONNECTING
         ) {
 
             socket.close();
@@ -455,8 +410,9 @@ export const createYjsConnection = (
         }
 
 
-        undoManager.destroy();
+        registeredTexts.clear();
 
+        undoManager.destroy();
 
         ydoc.destroy();
 
