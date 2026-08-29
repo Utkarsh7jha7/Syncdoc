@@ -3,7 +3,8 @@ import * as awarenessProtocol from "y-protocols/awareness";
 
 export const createYjsConnection = (
     documentId,
-    currentUser
+    currentUser,
+    onStatusChange = () => {}
 ) => {
 
     // =========================================
@@ -72,26 +73,75 @@ export const createYjsConnection = (
                 return;
             }
 
+
             if (
                 registeredTexts.has(
                     yText
                 )
             ) {
+
                 return;
+
             }
+
 
             registeredTexts.add(
                 yText
             );
 
+
             undoManager.addToScope(
                 yText
             );
+
 
             console.log(
                 "TEXT REGISTERED FOR UNDO:",
                 yText.toString()
             );
+
+        };
+
+
+    // =========================================
+    // CONNECTION STATE
+    // =========================================
+
+    let connectionStatus =
+        "connecting";
+
+
+    let destroyed =
+        false;
+
+
+    let reconnectTimer =
+        null;
+
+
+    let reconnectAttempts =
+        0;
+
+
+    const MAX_RECONNECT_DELAY =
+        10000;
+
+
+    const notifyStatus =
+        (status) => {
+
+            connectionStatus =
+                status;
+
+            console.log(
+                "YJS CONNECTION STATUS:",
+                status
+            );
+
+            onStatusChange(
+                status
+            );
+
         };
 
 
@@ -99,17 +149,372 @@ export const createYjsConnection = (
     // WEBSOCKET
     // =========================================
 
-    const socket =
-        new WebSocket(
-            `ws://localhost:5000?documentId=${documentId}`
+    let socket = null;
+
+
+    // =========================================
+    // PENDING YJS MESSAGES
+    // =========================================
+
+    const pendingMessages =
+        [];
+
+
+    // =========================================
+    // SEND MESSAGE
+    // =========================================
+
+    const sendMessage =
+        (message) => {
+
+            if (
+                socket &&
+                socket.readyState ===
+                    WebSocket.OPEN
+            ) {
+
+                socket.send(
+                    message
+                );
+
+                return true;
+
+            }
+
+
+            return false;
+
+        };
+
+
+    // =========================================
+    // CREATE WEBSOCKET
+    // =========================================
+
+    const connect = () => {
+
+        if (
+            destroyed
+        ) {
+
+            return;
+
+        }
+
+
+        notifyStatus(
+            "connecting"
         );
 
-    socket.binaryType =
-        "arraybuffer";
 
-    let connected = false;
+        console.log(
+            "CONNECTING TO COLLABORATION SERVER..."
+        );
 
-    const pendingMessages = [];
+
+        socket =
+            new WebSocket(
+                `ws://localhost:5000?documentId=${documentId}`
+            );
+
+
+        socket.binaryType =
+            "arraybuffer";
+
+
+        // =====================================
+        // MESSAGE RECEIVED
+        // =====================================
+
+        socket.onmessage =
+            (event) => {
+
+                const message =
+                    new Uint8Array(
+                        event.data
+                    );
+
+
+                if (
+                    message.length === 0
+                ) {
+
+                    return;
+
+                }
+
+
+                const type =
+                    message[0];
+
+
+                const data =
+                    message.slice(1);
+
+
+                // =================================
+                // YJS UPDATE
+                // =================================
+
+                if (
+                    type === 0
+                ) {
+
+                    Y.applyUpdate(
+                        ydoc,
+                        data,
+                        "remote"
+                    );
+
+                }
+
+
+                // =================================
+                // AWARENESS UPDATE
+                // =================================
+
+                if (
+                    type === 1
+                ) {
+
+                    awarenessProtocol
+                        .applyAwarenessUpdate(
+                            awareness,
+                            data,
+                            "remote"
+                        );
+
+                }
+
+            };
+
+
+        // =====================================
+        // SOCKET OPEN
+        // =====================================
+
+        socket.onopen =
+            () => {
+
+                reconnectAttempts =
+                    0;
+
+
+                notifyStatus(
+                    "connected"
+                );
+
+
+                console.log(
+                    "CONNECTED TO COLLABORATION SERVER"
+                );
+
+
+                // ---------------------------------
+                // SEND PENDING YJS UPDATES
+                // ---------------------------------
+
+                while (
+                    pendingMessages.length > 0
+                ) {
+
+                    const message =
+                        pendingMessages.shift();
+
+
+                    socket.send(
+                        message
+                    );
+
+                }
+
+
+                // ---------------------------------
+                // SEND CURRENT DOCUMENT STATE
+                // ---------------------------------
+
+                const stateUpdate =
+                    Y.encodeStateAsUpdate(
+                        ydoc
+                    );
+
+
+                if (
+                    stateUpdate.length > 0
+                ) {
+
+                    const stateMessage =
+                        new Uint8Array(
+                            stateUpdate.length + 1
+                        );
+
+
+                    stateMessage[0] =
+                        0;
+
+
+                    stateMessage.set(
+                        stateUpdate,
+                        1
+                    );
+
+
+                    socket.send(
+                        stateMessage
+                    );
+
+                }
+
+
+                // ---------------------------------
+                // SEND AWARENESS
+                // ---------------------------------
+
+                const awarenessUpdate =
+                    awarenessProtocol
+                        .encodeAwarenessUpdate(
+                            awareness,
+                            [
+                                awareness.clientID
+                            ]
+                        );
+
+
+                const awarenessMessage =
+                    new Uint8Array(
+                        awarenessUpdate.length + 1
+                    );
+
+
+                awarenessMessage[0] =
+                    1;
+
+
+                awarenessMessage.set(
+                    awarenessUpdate,
+                    1
+                );
+
+
+                socket.send(
+                    awarenessMessage
+                );
+
+            };
+
+
+        // =====================================
+        // SOCKET CLOSE
+        // =====================================
+
+        socket.onclose =
+            () => {
+
+                if (
+                    destroyed
+                ) {
+
+                    return;
+
+                }
+
+
+                notifyStatus(
+                    "disconnected"
+                );
+
+
+                console.log(
+                    "DISCONNECTED FROM SERVER"
+                );
+
+
+                scheduleReconnect();
+
+            };
+
+
+        // =====================================
+        // SOCKET ERROR
+        // =====================================
+
+        socket.onerror =
+            (error) => {
+
+                console.error(
+                    "WEBSOCKET ERROR:",
+                    error
+                );
+
+
+                notifyStatus(
+                    "disconnected"
+                );
+
+            };
+
+    };
+
+
+    // =========================================
+    // RECONNECT
+    // =========================================
+
+    const scheduleReconnect =
+        () => {
+
+            if (
+                destroyed
+            ) {
+
+                return;
+
+            }
+
+
+            if (
+                reconnectTimer
+            ) {
+
+                return;
+
+            }
+
+
+            reconnectAttempts++;
+
+
+            const delay =
+                Math.min(
+                    1000 *
+                    Math.pow(
+                        2,
+                        reconnectAttempts - 1
+                    ),
+                    MAX_RECONNECT_DELAY
+                );
+
+
+            console.log(
+                `RECONNECTING IN ${delay}ms`
+            );
+
+
+            reconnectTimer =
+                setTimeout(
+                    () => {
+
+                        reconnectTimer =
+                            null;
+
+
+                        connect();
+
+                    },
+                    delay
+                );
+
+        };
 
 
     // =========================================
@@ -123,19 +528,27 @@ export const createYjsConnection = (
             origin
         ) => {
 
+            // Ignore updates received
+            // from remote users.
             if (
                 origin === "remote"
             ) {
+
                 return;
+
             }
+
 
             const message =
                 new Uint8Array(
                     update.length + 1
                 );
 
+
             // 0 = YJS update
-            message[0] = 0;
+            message[0] =
+                0;
+
 
             message.set(
                 update,
@@ -143,17 +556,15 @@ export const createYjsConnection = (
             );
 
 
+            // ---------------------------------
+            // SEND IMMEDIATELY
+            // ---------------------------------
+
             if (
-                connected &&
-                socket.readyState ===
-                    WebSocket.OPEN
-            ) {
-
-                socket.send(
+                !sendMessage(
                     message
-                );
-
-            } else {
+                )
+            ) {
 
                 pendingMessages.push(
                     message
@@ -183,11 +594,15 @@ export const createYjsConnection = (
                 ...removed
             ];
 
+
             if (
                 clients.length === 0
             ) {
+
                 return;
+
             }
+
 
             const update =
                 awarenessProtocol
@@ -196,13 +611,17 @@ export const createYjsConnection = (
                         clients
                     );
 
+
             const message =
                 new Uint8Array(
                     update.length + 1
                 );
 
-            // 1 = Awareness
-            message[0] = 1;
+
+            // 1 = awareness
+            message[0] =
+                1;
+
 
             message.set(
                 update,
@@ -210,213 +629,113 @@ export const createYjsConnection = (
             );
 
 
-            if (
-                connected &&
-                socket.readyState ===
-                    WebSocket.OPEN
-            ) {
-
-                socket.send(
-                    message
-                );
-
-            }
+            sendMessage(
+                message
+            );
 
         }
     );
 
 
     // =========================================
-    // RECEIVE MESSAGE
-    // =========================================
-
-    socket.onmessage = (
-        event
-    ) => {
-
-        const message =
-            new Uint8Array(
-                event.data
-            );
-
-        if (
-            message.length === 0
-        ) {
-            return;
-        }
-
-        const type =
-            message[0];
-
-        const data =
-            message.slice(1);
-
-
-        // =====================================
-        // YJS UPDATE
-        // =====================================
-
-        if (
-            type === 0
-        ) {
-
-            Y.applyUpdate(
-                ydoc,
-                data,
-                "remote"
-            );
-
-        }
-
-
-        // =====================================
-        // AWARENESS UPDATE
-        // =====================================
-
-        if (
-            type === 1
-        ) {
-
-            awarenessProtocol
-                .applyAwarenessUpdate(
-                    awareness,
-                    data,
-                    "remote"
-                );
-
-        }
-
-    };
-
-
-    // =========================================
-    // CONNECTION OPEN
-    // =========================================
-
-    socket.onopen = () => {
-
-        connected = true;
-
-        console.log(
-            "CONNECTED TO COLLABORATION SERVER"
-        );
-
-
-        // -------------------------------------
-        // SEND PENDING UPDATES
-        // -------------------------------------
-
-        while (
-            pendingMessages.length > 0
-        ) {
-
-            const message =
-                pendingMessages.shift();
-
-            socket.send(
-                message
-            );
-
-        }
-
-
-        // -------------------------------------
-        // SEND AWARENESS
-        // -------------------------------------
-
-        const awarenessUpdate =
-            awarenessProtocol
-                .encodeAwarenessUpdate(
-                    awareness,
-                    [
-                        awareness.clientID
-                    ]
-                );
-
-        const message =
-            new Uint8Array(
-                awarenessUpdate.length + 1
-            );
-
-        message[0] = 1;
-
-        message.set(
-            awarenessUpdate,
-            1
-        );
-
-        socket.send(
-            message
-        );
-
-    };
-
-
-    // =========================================
-    // SOCKET CLOSE
-    // =========================================
-
-    socket.onclose = () => {
-
-        connected = false;
-
-        console.log(
-            "DISCONNECTED FROM SERVER"
-        );
-
-    };
-
-
-    // =========================================
-    // SOCKET ERROR
-    // =========================================
-
-    socket.onerror = (
-        error
-    ) => {
-
-        console.error(
-            "WEBSOCKET ERROR:",
-            error
-        );
-
-    };
-
-
-    // =========================================
     // DESTROY
     // =========================================
 
-    const destroy = () => {
+    const destroy =
+        () => {
 
-        console.log(
-            "DESTROYING YJS CONNECTION"
-        );
+            if (
+                destroyed
+            ) {
 
-        awareness.setLocalState(
-            null
-        );
+                return;
 
-
-        if (
-            socket.readyState ===
-                WebSocket.OPEN ||
-            socket.readyState ===
-                WebSocket.CONNECTING
-        ) {
-
-            socket.close();
-
-        }
+            }
 
 
-        registeredTexts.clear();
+            destroyed =
+                true;
 
-        undoManager.destroy();
 
-        ydoc.destroy();
+            console.log(
+                "DESTROYING YJS CONNECTION"
+            );
 
-    };
+
+            // ---------------------------------
+            // Cancel reconnect
+            // ---------------------------------
+
+            if (
+                reconnectTimer
+            ) {
+
+                clearTimeout(
+                    reconnectTimer
+                );
+
+                reconnectTimer =
+                    null;
+
+            }
+
+
+            // ---------------------------------
+            // Clear awareness
+            // ---------------------------------
+
+            awareness.setLocalState(
+                null
+            );
+
+
+            // ---------------------------------
+            // Close socket
+            // ---------------------------------
+
+            if (
+                socket &&
+                (
+                    socket.readyState ===
+                        WebSocket.OPEN ||
+
+                    socket.readyState ===
+                        WebSocket.CONNECTING
+                )
+            ) {
+
+                socket.close();
+
+            }
+
+
+            // ---------------------------------
+            // Cleanup
+            // ---------------------------------
+
+            registeredTexts.clear();
+
+            pendingMessages.length =
+                0;
+
+
+            undoManager.destroy();
+
+            ydoc.destroy();
+
+
+            notifyStatus(
+                "disconnected"
+            );
+
+        };
+
+
+    // =========================================
+    // START CONNECTION
+    // =========================================
+
+    connect();
 
 
     // =========================================
@@ -429,7 +748,9 @@ export const createYjsConnection = (
 
         blocks,
 
-        socket,
+        get socket() {
+            return socket;
+        },
 
         awareness,
 
@@ -437,7 +758,11 @@ export const createYjsConnection = (
 
         registerTextForUndo,
 
-        destroy
+        destroy,
+
+        get connectionStatus() {
+            return connectionStatus;
+        }
 
     };
 

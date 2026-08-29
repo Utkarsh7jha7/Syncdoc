@@ -3,11 +3,11 @@ import {
     updateBlock,
     createBlock,
     deleteBlock,
-    updateBlockChildren
+    updateBlockChildren,
+    reorderBlocks
 } from "../services/documentService";
 
-import EditableBlock
-    from "../components/EditableBlock";
+import EditableBlock from "../components/EditableBlock";
 
 import {
     useEffect,
@@ -32,50 +32,29 @@ const DOCUMENT_ID =
 
 function Editor() {
 
-    console.log(
-        "EDITOR COMPONENT IS RUNNING"
-    );
-
+    // =========================================
+    // CURRENT USER
+    // =========================================
 
     const currentUser =
         getCurrentUser();
-
-
-    console.log(
-        "CURRENT USER:",
-        currentUser
-    );
 
 
     // =========================================
     // STATE
     // =========================================
 
-    const [
-        document,
-        setDocument
-    ] = useState(null);
+    const [onlineUsers, setOnlineUsers] =
+        useState([]);
 
+    const [activeUsers, setActiveUsers] =
+        useState({});
 
-    const [
-        loading,
-        setLoading
-    ] = useState(true);
+    const [draggedBlockId, setDraggedBlockId] =
+        useState(null);
 
-
-    const [
-        onlineUsers,
-        setOnlineUsers
-    ] = useState([]);
-
-
-    const [
-        activeUsers,
-        setActiveUsers
-    ] = useState({});
-
-    const [draggedBlockId, setDraggedBlockId] = useState(null);
-
+    const [connectionStatus, setConnectionStatus] =
+        useState("connecting");
 
     // =========================================
     // REFS
@@ -97,17 +76,7 @@ function Editor() {
 
         let connection = null;
 
-
-        // =====================================
-        // ONLINE USERS
-        // =====================================
-
         let updateOnlineUsers = null;
-
-
-        // =====================================
-        // BLOCK CHANGES
-        // =====================================
 
         let handleBlocksChange = null;
 
@@ -138,6 +107,18 @@ function Editor() {
                     );
 
 
+                    if (
+                        !data ||
+                        !data.document
+                    ) {
+
+                        setDocument(null);
+
+                        return;
+
+                    }
+
+
                     setDocument(
                         data.document
                     );
@@ -147,12 +128,17 @@ function Editor() {
                     // CREATE YJS CONNECTION
                     // =================================
 
-                    connection =
-                        createYjsConnection(
-                            DOCUMENT_ID,
-                            currentUser
-                        );
+                    connection = createYjsConnection(
+                        DOCUMENT_ID,
+                        currentUser,
+                        (status) => {
 
+                            setConnectionStatus(
+                                status
+                            );
+
+                        }
+                    );
 
                     yjsRef.current =
                         connection;
@@ -203,13 +189,10 @@ function Editor() {
                                             return {
 
                                                 name:
-                                                    state
-                                                        .user
-                                                        .name,
+                                                    state.user.name,
 
                                                 editingBlock:
-                                                    state
-                                                        .editingBlock ||
+                                                    state.editingBlock ||
                                                     null
 
                                             };
@@ -221,13 +204,19 @@ function Editor() {
                                     );
 
 
+                            console.log(
+                                "ONLINE USERS:",
+                                users
+                            );
+
+
                             setOnlineUsers(
                                 users
                             );
 
 
                             // =================================
-                            // BUILD ACTIVE USERS
+                            // ACTIVE EDITING USERS
                             // =================================
 
                             const editing =
@@ -291,7 +280,7 @@ function Editor() {
 
 
                     // =================================
-                    // BLOCK CHANGES
+                    // YJS BLOCK ADD / DELETE
                     // =================================
 
                     handleBlocksChange =
@@ -333,8 +322,6 @@ function Editor() {
                                             );
 
 
-                                        // Register the text
-                                        // with UndoManager
                                         if (
                                             yText
                                         ) {
@@ -360,8 +347,7 @@ function Editor() {
 
                                             content:
                                                 yText
-                                                    ? yText
-                                                        .toString()
+                                                    ? yText.toString()
                                                     : "",
 
                                             level:
@@ -376,8 +362,16 @@ function Editor() {
                                                 ) ||
                                                 null,
 
+                                            parentId:
+                                                yBlock.get(
+                                                    "parentId"
+                                                ) ||
+                                                null,
+
                                             children:
-                                                []
+                                                yBlock.get(
+                                                    "children"
+                                                ) || []
 
                                         };
 
@@ -403,8 +397,12 @@ function Editor() {
                                                             (
                                                                 block
                                                             ) =>
-                                                                block._id ===
-                                                                blockId
+                                                                String(
+                                                                    block._id
+                                                                ) ===
+                                                                String(
+                                                                    blockId
+                                                                )
                                                         );
 
 
@@ -470,8 +468,12 @@ function Editor() {
                                                                 (
                                                                     block
                                                                 ) =>
-                                                                    block._id !==
-                                                                    blockId
+                                                                    String(
+                                                                        block._id
+                                                                    ) !==
+                                                                    String(
+                                                                        blockId
+                                                                    )
                                                             )
 
                                                 };
@@ -493,7 +495,7 @@ function Editor() {
 
 
                     // =================================
-                    // INITIALIZE BLOCKS
+                    // INITIALIZE YJS
                     // =================================
 
                     if (
@@ -501,7 +503,7 @@ function Editor() {
                     ) {
 
                         console.log(
-                            "INITIALIZING YJS BLOCKS"
+                            "INITIALIZING YJS FROM MONGODB"
                         );
 
 
@@ -534,6 +536,30 @@ function Editor() {
                                 );
 
 
+                                yBlock.set(
+                                    "parentId",
+                                    block.parentId ||
+                                    null
+                                );
+
+
+                                yBlock.set(
+                                    "children",
+                                    (
+                                        block.children ||
+                                        []
+                                    ).map(
+                                        (
+                                            child
+                                        ) =>
+                                            typeof child ===
+                                                "object"
+                                                ? child._id
+                                                : child
+                                    )
+                                );
+
+
                                 const yText =
                                     new Y.Text();
 
@@ -551,15 +577,12 @@ function Editor() {
                                 );
 
 
-                                // Put block into YJS first
                                 blocks.set(
                                     block._id,
                                     yBlock
                                 );
 
 
-                                // Now register text
-                                // for Undo / Redo
                                 connection
                                     .registerTextForUndo(
                                         yText
@@ -571,7 +594,7 @@ function Editor() {
                     } else {
 
                         // =================================
-                        // REGISTER EXISTING YJS TEXTS
+                        // REGISTER EXISTING TEXT
                         // =================================
 
                         blocks.forEach(
@@ -616,7 +639,6 @@ function Editor() {
                         "FAILED TO LOAD DOCUMENT:",
                         error
                     );
-
 
                 } finally {
 
@@ -704,16 +726,37 @@ function Editor() {
             try {
 
                 const blockData = {
+
                     type,
-                    content: "",
-                    level: type === "heading" ? 2 : 0,
+
+                    content:
+                        "",
+
+                    level:
+                        type === "heading"
+                            ? 2
+                            : 0,
+
                     language:
                         type === "code"
                             ? "javascript"
                             : null,
-                    documentId: DOCUMENT_ID
+
+                    parentId:
+                        null,
+
+                    children:
+                        [],
+
+                    documentId:
+                        DOCUMENT_ID
+
                 };
 
+
+                // =================================
+                // CREATE IN MONGODB
+                // =================================
 
                 const data =
                     await createBlock(
@@ -770,15 +813,21 @@ function Editor() {
                 );
 
 
+                yBlock.set(
+                    "parentId",
+                    newBlock.parentId ||
+                    null
+                );
+
+
+                yBlock.set(
+                    "children",
+                    []
+                );
+
+
                 const yText =
                     new Y.Text();
-
-
-                yText.insert(
-                    0,
-                    newBlock.content ||
-                    ""
-                );
 
 
                 yBlock.set(
@@ -788,7 +837,7 @@ function Editor() {
 
 
                 // =================================
-                // REGISTER TEXT FOR UNDO
+                // REGISTER UNDO
                 // =================================
 
                 connection.registerTextForUndo(
@@ -836,24 +885,10 @@ function Editor() {
 
             try {
 
-                console.log(
-                    "DELETING BLOCK:",
-                    blockId
-                );
-
-
-                // =================================
-                // DELETE FROM MONGODB
-                // =================================
-
                 await deleteBlock(
                     blockId
                 );
 
-
-                // =================================
-                // DELETE FROM YJS
-                // =================================
 
                 const connection =
                     yjsRef.current;
@@ -893,41 +928,50 @@ function Editor() {
     // DRAG START
     // =========================================
 
-    const handleDragStart = (
-        event,
-        blockId
-    ) => {
-
-        setDraggedBlockId(
+    const handleDragStart =
+        (
+            event,
             blockId
-        );
+        ) => {
 
-        event.dataTransfer.effectAllowed =
-            "move";
+            setDraggedBlockId(
+                blockId
+            );
 
-        event.dataTransfer.setData(
-            "text/plain",
-            blockId
-        );
 
-    };
+            event.dataTransfer.effectAllowed =
+                "move";
+
+
+            event.dataTransfer.setData(
+                "text/plain",
+                blockId
+            );
+
+        };
 
 
     // =========================================
     // DRAG OVER
     // =========================================
 
-    const handleDragOver = (
-        event
-    ) => {
+    const handleDragOver =
+        (
+            event
+        ) => {
 
-        event.preventDefault();
+            event.preventDefault();
 
-        event.dataTransfer.dropEffect =
-            "move";
 
-    };
+            event.dataTransfer.dropEffect =
+                "move";
 
+        };
+
+
+    // =========================================
+    // DROP BLOCK
+    // =========================================
 
     // =========================================
     // DROP BLOCK
@@ -945,6 +989,9 @@ function Editor() {
                 "text/plain"
             );
 
+        // -----------------------------------------
+        // INVALID DROP
+        // -----------------------------------------
 
         if (
             !sourceBlockId ||
@@ -954,116 +1001,476 @@ function Editor() {
             setDraggedBlockId(null);
 
             return;
-
         }
 
 
-        const currentBlocks =
-            document.blocks;
+        if (!document) {
+
+            setDraggedBlockId(null);
+
+            return;
+        }
 
 
-        const sourceIndex =
-            currentBlocks.findIndex(
+        const sourceBlock =
+            document.blocks.find(
                 (block) =>
-                    block._id ===
-                    sourceBlockId
+                    String(block._id) ===
+                    String(sourceBlockId)
             );
 
 
-        const targetIndex =
-            currentBlocks.findIndex(
+        const targetBlock =
+            document.blocks.find(
                 (block) =>
-                    block._id ===
-                    targetBlockId
+                    String(block._id) ===
+                    String(targetBlockId)
             );
 
 
         if (
-            sourceIndex === -1 ||
-            targetIndex === -1
+            !sourceBlock ||
+            !targetBlock
         ) {
 
             setDraggedBlockId(null);
 
             return;
+        }
+
+
+        // -----------------------------------------
+        // PREVENT CIRCULAR AST
+        // -----------------------------------------
+
+        const isDescendant = (
+            parentId,
+            possibleChildId
+        ) => {
+
+            const parent =
+                document.blocks.find(
+                    (block) =>
+                        String(block._id) ===
+                        String(parentId)
+                );
+
+
+            if (!parent) {
+                return false;
+            }
+
+
+            const children =
+                parent.children || [];
+
+
+            for (
+                const child of children
+            ) {
+
+                const childId =
+                    typeof child === "object"
+                        ? child._id
+                        : child;
+
+
+                if (
+                    String(childId) ===
+                    String(possibleChildId)
+                ) {
+
+                    return true;
+                }
+
+
+                if (
+                    isDescendant(
+                        childId,
+                        possibleChildId
+                    )
+                ) {
+
+                    return true;
+                }
+
+            }
+
+
+            return false;
+
+        };
+
+
+        // Don't allow:
+        //
+        // A
+        //  └── B
+        //
+        // B → A
+        //
+        if (
+            isDescendant(
+                sourceBlockId,
+                targetBlockId
+            )
+        ) {
+
+            console.warn(
+                "Cannot create circular AST"
+            );
+
+            setDraggedBlockId(null);
+
+            return;
+        }
+
+
+        // -----------------------------------------
+        // CURRENT PARENT OF SOURCE
+        // -----------------------------------------
+
+        const oldParentId =
+            sourceBlock.parentId || null;
+
+
+        // -----------------------------------------
+        // REMOVE SOURCE FROM OLD PARENT
+        // -----------------------------------------
+
+        if (oldParentId) {
+
+            const oldParent =
+                document.blocks.find(
+                    (block) =>
+                        String(block._id) ===
+                        String(oldParentId)
+                );
+
+
+            if (oldParent) {
+
+                const oldChildren =
+                    (
+                        oldParent.children ||
+                        []
+                    );
+
+
+                const updatedOldChildren =
+                    oldChildren
+                        .map(
+                            (child) =>
+                                typeof child ===
+                                    "object"
+                                    ? child._id
+                                    : child
+                        )
+                        .filter(
+                            (childId) =>
+                                String(childId) !==
+                                String(sourceBlockId)
+                        );
+
+
+                await updateBlockChildren(
+                    oldParentId,
+                    updatedOldChildren
+                );
+
+            }
 
         }
 
 
         // -----------------------------------------
-        // CREATE NEW ORDER
+        // ADD SOURCE TO TARGET CHILDREN
         // -----------------------------------------
 
-        const reorderedBlocks =
-            [...currentBlocks];
+        const targetChildren =
+            (
+                targetBlock.children ||
+                []
+            )
+                .map(
+                    (child) =>
+                        typeof child === "object"
+                            ? child._id
+                            : child
+                )
+                .filter(
+                    (childId) =>
+                        String(childId) !==
+                        String(sourceBlockId)
+                );
 
 
-        const [
-            movedBlock
-        ] =
-            reorderedBlocks.splice(
-                sourceIndex,
-                1
-            );
-
-
-        reorderedBlocks.splice(
-            targetIndex,
-            0,
-            movedBlock
+        targetChildren.push(
+            sourceBlockId
         );
 
 
         // -----------------------------------------
-        // UPDATE UI IMMEDIATELY
+        // UPDATE TARGET CHILDREN
+        // -----------------------------------------
+
+        await updateBlockChildren(
+            targetBlockId,
+            targetChildren
+        );
+
+
+        // -----------------------------------------
+        // UPDATE SOURCE PARENT
+        // -----------------------------------------
+
+        const sourceResponse =
+            await fetch(
+                `http://localhost:5000/api/blocks/${sourceBlockId}`,
+                {
+                    method: "PUT",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        parentId:
+                            targetBlockId
+                    })
+                }
+            );
+
+
+        if (
+            !sourceResponse.ok
+        ) {
+
+            throw new Error(
+                "Failed to update block parent"
+            );
+
+        }
+
+
+        // -----------------------------------------
+        // UPDATE LOCAL STATE
         // -----------------------------------------
 
         setDocument(
-            (previousDocument) => ({
+            (previousDocument) => {
 
-                ...previousDocument,
+                if (
+                    !previousDocument
+                ) {
 
-                blocks:
-                    reorderedBlocks
+                    return previousDocument;
+                }
 
-            })
+
+                return {
+
+                    ...previousDocument,
+
+                    blocks:
+                        previousDocument.blocks.map(
+                            (block) => {
+
+                                // SOURCE BLOCK
+                                if (
+                                    String(
+                                        block._id
+                                    ) ===
+                                    String(
+                                        sourceBlockId
+                                    )
+                                ) {
+
+                                    return {
+
+                                        ...block,
+
+                                        parentId:
+                                            targetBlockId
+
+                                    };
+
+                                }
+
+
+                                // TARGET BLOCK
+                                if (
+                                    String(
+                                        block._id
+                                    ) ===
+                                    String(
+                                        targetBlockId
+                                    )
+                                ) {
+
+                                    return {
+
+                                        ...block,
+
+                                        children:
+                                            targetChildren
+
+                                    };
+
+                                }
+
+
+                                // OLD PARENT
+                                if (
+                                    oldParentId &&
+                                    String(
+                                        block._id
+                                    ) ===
+                                    String(
+                                        oldParentId
+                                    )
+                                ) {
+
+                                    return {
+
+                                        ...block,
+
+                                        children:
+                                            (
+                                                block.children ||
+                                                []
+                                            )
+                                                .map(
+                                                    (child) =>
+                                                        typeof child ===
+                                                            "object"
+                                                            ? child._id
+                                                            : child
+                                                )
+                                                .filter(
+                                                    (childId) =>
+                                                        String(
+                                                            childId
+                                                        ) !==
+                                                        String(
+                                                            sourceBlockId
+                                                        )
+                                                )
+
+                                    };
+
+                                }
+
+
+                                return block;
+
+                            }
+                        )
+
+                };
+
+            }
         );
 
 
-        setDraggedBlockId(null);
-
-
         // -----------------------------------------
-        // SAVE ORDER TO MONGODB
+        // UPDATE YJS
         // -----------------------------------------
 
-        try {
-
-            await reorderBlocks(
-
-                DOCUMENT_ID,
-
-                reorderedBlocks.map(
-                    (block) =>
-                        block._id
-                )
-
-            );
+        const connection =
+            yjsRef.current;
 
 
-            console.log(
-                "BLOCK ORDER SAVED"
-            );
+        if (connection) {
+
+            const sourceYBlock =
+                connection.blocks.get(
+                    sourceBlockId
+                );
 
 
-        } catch (error) {
+            const targetYBlock =
+                connection.blocks.get(
+                    targetBlockId
+                );
 
-            console.error(
-                "FAILED TO SAVE BLOCK ORDER:",
-                error
-            );
+
+            if (
+                sourceYBlock
+            ) {
+
+                sourceYBlock.set(
+                    "parentId",
+                    targetBlockId
+                );
+
+            }
+
+
+            if (
+                targetYBlock
+            ) {
+
+                targetYBlock.set(
+                    "children",
+                    targetChildren
+                );
+
+            }
+
+
+            if (
+                oldParentId
+            ) {
+
+                const oldParentYBlock =
+                    connection.blocks.get(
+                        oldParentId
+                    );
+
+
+                if (
+                    oldParentYBlock
+                ) {
+
+                    const oldChildren =
+                        (
+                            oldParentYBlock.get(
+                                "children"
+                            ) ||
+                            []
+                        )
+                            .filter(
+                                (childId) =>
+                                    String(childId) !==
+                                    String(sourceBlockId)
+                            );
+
+
+                    oldParentYBlock.set(
+                        "children",
+                        oldChildren
+                    );
+
+                }
+
+            }
 
         }
+
+
+        setDraggedBlockId(
+            null
+        );
+
+
+        console.log(
+            "AST NESTING UPDATED:",
+            sourceBlockId,
+            "→",
+            targetBlockId
+        );
 
     };
 
@@ -1071,114 +1478,409 @@ function Editor() {
     // ADD BLOCK AS CHILD
     // =========================================
 
-    const handleAddChild = async (
-        parentId,
-        childId
-    ) => {
+    const handleAddChild =
+        async (
+            parentId,
+            childId
+        ) => {
 
-        try {
+            try {
 
-            const parentBlock =
-                document.blocks.find(
-                    (block) =>
-                        block._id === parentId
-                );
+                if (
+                    String(parentId) ===
+                    String(childId)
+                ) {
 
-            if (!parentBlock) {
-                return;
-            }
-
-            // Prevent block becoming its own child
-            if (parentId === childId) {
-                return;
-            }
-
-            const currentChildren =
-                parentBlock.children || [];
-
-            // Prevent duplicate child
-            if (
-                currentChildren.some(
-                    (child) =>
-                        String(
-                            typeof child === "object"
-                                ? child._id
-                                : child
-                        ) === String(childId)
-                )
-            ) {
-                return;
-            }
-
-            const updatedChildren = [
-                ...currentChildren.map(
-                    (child) =>
-                        typeof child === "object"
-                            ? child._id
-                            : child
-                ),
-                childId
-            ];
-
-            await updateBlockChildren(
-                parentId,
-                updatedChildren
-            );
-
-            // Update local document
-            setDocument(
-                (previousDocument) => {
-
-                    if (!previousDocument) {
-                        return previousDocument;
-                    }
-
-                    return {
-                        ...previousDocument,
-
-                        blocks:
-                            previousDocument.blocks.map(
-                                (block) => {
-
-                                    if (
-                                        block._id ===
-                                        parentId
-                                    ) {
-
-                                        return {
-                                            ...block,
-                                            children:
-                                                updatedChildren
-                                        };
-
-                                    }
-
-                                    return block;
-
-                                }
-                            )
-                    };
+                    return;
 
                 }
-            );
 
-            console.log(
-                "CHILD BLOCK ADDED:",
-                childId,
-                "TO:",
-                parentId
-            );
 
-        } catch (error) {
+                const parentBlock =
+                    document.blocks.find(
+                        (
+                            block
+                        ) =>
+                            String(
+                                block._id
+                            ) ===
+                            String(
+                                parentId
+                            )
+                    );
 
-            console.error(
-                "FAILED TO ADD CHILD BLOCK:",
-                error
-            );
 
-        }
+                const childBlock =
+                    document.blocks.find(
+                        (
+                            block
+                        ) =>
+                            String(
+                                block._id
+                            ) ===
+                            String(
+                                childId
+                            )
+                    );
 
-    };
+
+                if (
+                    !parentBlock ||
+                    !childBlock
+                ) {
+
+                    return;
+
+                }
+
+
+                // =================================
+                // PREVENT CIRCULAR HIERARCHY
+                // =================================
+
+                const isDescendant =
+                    (
+                        candidateId,
+                        targetId
+                    ) => {
+
+                        const candidate =
+                            document.blocks.find(
+                                (
+                                    block
+                                ) =>
+                                    String(
+                                        block._id
+                                    ) ===
+                                    String(
+                                        candidateId
+                                    )
+                            );
+
+
+                        if (
+                            !candidate
+                        ) {
+
+                            return false;
+
+                        }
+
+
+                        const children =
+                            candidate.children ||
+                            [];
+
+
+                        for (
+                            const child
+                            of children
+                        ) {
+
+                            const id =
+                                typeof child ===
+                                    "object"
+                                    ? child._id
+                                    : child;
+
+
+                            if (
+                                String(id) ===
+                                String(targetId)
+                            ) {
+
+                                return true;
+
+                            }
+
+
+                            if (
+                                isDescendant(
+                                    id,
+                                    targetId
+                                )
+                            ) {
+
+                                return true;
+
+                            }
+
+                        }
+
+
+                        return false;
+
+                    };
+
+
+                if (
+                    isDescendant(
+                        childId,
+                        parentId
+                    )
+                ) {
+
+                    console.warn(
+                        "CANNOT CREATE CIRCULAR AST"
+                    );
+
+                    return;
+
+                }
+
+
+                // =================================
+                // EXISTING CHILDREN
+                // =================================
+
+                const currentChildren =
+                    parentBlock.children ||
+                    [];
+
+
+                const childAlreadyExists =
+                    currentChildren.some(
+                        (
+                            child
+                        ) => {
+
+                            const id =
+                                typeof child ===
+                                    "object"
+                                    ? child._id
+                                    : child;
+
+
+                            return (
+                                String(id) ===
+                                String(childId)
+                            );
+
+                        }
+                    );
+
+
+                if (
+                    childAlreadyExists
+                ) {
+
+                    return;
+
+                }
+
+
+                const updatedChildren =
+                    [
+                        ...currentChildren.map(
+                            (
+                                child
+                            ) =>
+                                typeof child ===
+                                    "object"
+                                    ? child._id
+                                    : child
+                        ),
+
+                        childId
+                    ];
+
+
+                // =================================
+                // UPDATE PARENT
+                // =================================
+
+                await updateBlockChildren(
+                    parentId,
+                    updatedChildren
+                );
+
+
+                // =================================
+                // UPDATE CHILD
+                // =================================
+
+                const childResponse =
+                    await fetch(
+                        `http://localhost:5000/api/blocks/${childId}`,
+                        {
+                            method: "PUT",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body: JSON.stringify({
+                                parentId
+                            })
+                        }
+                    );
+
+
+                if (
+                    !childResponse.ok
+                ) {
+
+                    throw new Error(
+                        "Failed to update child parent"
+                    );
+
+                }
+
+
+                // =================================
+                // UPDATE YJS
+                // =================================
+
+                const connection =
+                    yjsRef.current;
+
+
+                if (
+                    connection
+                ) {
+
+                    const parentYBlock =
+                        connection.blocks.get(
+                            parentId
+                        );
+
+
+                    if (
+                        parentYBlock
+                    ) {
+
+                        parentYBlock.set(
+                            "children",
+                            updatedChildren
+                        );
+
+                    }
+
+
+                    const childYBlock =
+                        connection.blocks.get(
+                            childId
+                        );
+
+
+                    if (
+                        childYBlock
+                    ) {
+
+                        childYBlock.set(
+                            "parentId",
+                            parentId
+                        );
+
+                    }
+
+                }
+
+
+                // =================================
+                // UPDATE REACT STATE
+                // =================================
+
+                setDocument(
+                    (
+                        previousDocument
+                    ) => {
+
+                        if (
+                            !previousDocument
+                        ) {
+
+                            return previousDocument;
+
+                        }
+
+
+                        return {
+
+                            ...previousDocument,
+
+                            blocks:
+                                previousDocument
+                                    .blocks
+                                    .map(
+                                        (
+                                            block
+                                        ) => {
+
+                                            if (
+                                                String(
+                                                    block._id
+                                                ) ===
+                                                String(
+                                                    parentId
+                                                )
+                                            ) {
+
+                                                return {
+
+                                                    ...block,
+
+                                                    children:
+                                                        updatedChildren
+
+                                                };
+
+                                            }
+
+
+                                            if (
+                                                String(
+                                                    block._id
+                                                ) ===
+                                                String(
+                                                    childId
+                                                )
+                                            ) {
+
+                                                return {
+
+                                                    ...block,
+
+                                                    parentId
+
+                                                };
+
+                                            }
+
+
+                                            return block;
+
+                                        }
+                                    )
+
+                        };
+
+                    }
+                );
+
+
+                console.log(
+                    "AST RELATIONSHIP CREATED:",
+                    parentId,
+                    "→",
+                    childId
+                );
+
+
+            } catch (
+            error
+            ) {
+
+                console.error(
+                    "FAILED TO ADD CHILD BLOCK:",
+                    error
+                );
+
+            }
+
+        };
+
 
     // =========================================
     // BLOCK FOCUS
@@ -1208,11 +1910,6 @@ function Editor() {
                     blockId
                 );
 
-
-            console.log(
-                `${currentUser} is editing ${blockId}`
-            );
-
         };
 
 
@@ -1238,15 +1935,13 @@ function Editor() {
             }
 
 
-            const currentState =
+            const state =
                 connection.awareness
                     .getLocalState();
 
 
-            // Only clear if this block is
-            // still the active block.
             if (
-                currentState?.editingBlock ===
+                state?.editingBlock ===
                 blockId
             ) {
 
@@ -1258,11 +1953,6 @@ function Editor() {
 
             }
 
-
-            console.log(
-                `${currentUser} stopped editing ${blockId}`
-            );
-
         };
 
 
@@ -1270,120 +1960,179 @@ function Editor() {
     // BLOCK CONTENT CHANGE
     // =========================================
 
-    const handleBlockChange = (blockId, content) => {
+    const handleBlockChange =
+        (
+            blockId,
+            content
+        ) => {
 
-        // =========================================
-        // UPDATE REACT STATE
-        // =========================================
+            // =================================
+            // UPDATE REACT STATE
+            // =================================
 
-        setDocument((previousDocument) => {
+            setDocument(
+                (
+                    previousDocument
+                ) => {
 
-            if (!previousDocument) {
-                return previousDocument;
+                    if (
+                        !previousDocument
+                    ) {
+
+                        return previousDocument;
+
+                    }
+
+
+                    return {
+
+                        ...previousDocument,
+
+                        blocks:
+                            previousDocument
+                                .blocks
+                                .map(
+                                    (
+                                        block
+                                    ) => {
+
+                                        if (
+                                            String(
+                                                block._id
+                                            ) ===
+                                            String(
+                                                blockId
+                                            )
+                                        ) {
+
+                                            return {
+
+                                                ...block,
+
+                                                content
+
+                                            };
+
+                                        }
+
+
+                                        return block;
+
+                                    }
+                                )
+
+                    };
+
+                }
+            );
+
+
+            // =================================
+            // DEBOUNCE SAVE
+            // =================================
+
+            if (
+                saveTimers.current[
+                blockId
+                ]
+            ) {
+
+                clearTimeout(
+                    saveTimers.current[
+                    blockId
+                    ]
+                );
+
             }
 
-            return {
-                ...previousDocument,
 
-                blocks: previousDocument.blocks.map(
-                    (block) => {
+            saveTimers.current[
+                blockId
+            ] =
+                setTimeout(
+                    async () => {
 
-                        if (block._id === blockId) {
+                        try {
 
-                            return {
-                                ...block,
-                                content
-                            };
+                            const connection =
+                                yjsRef.current;
+
+
+                            if (
+                                !connection
+                            ) {
+
+                                return;
+
+                            }
+
+
+                            const yBlock =
+                                connection.blocks.get(
+                                    blockId
+                                );
+
+
+                            if (
+                                !yBlock
+                            ) {
+
+                                return;
+
+                            }
+
+
+                            const yText =
+                                yBlock.get(
+                                    "content"
+                                );
+
+
+                            if (
+                                !yText
+                            ) {
+
+                                return;
+
+                            }
+
+
+                            const mergedContent =
+                                yText.toString();
+
+
+                            await updateBlock(
+                                blockId,
+                                mergedContent
+                            );
+
+
+                            console.log(
+                                "MERGED BLOCK SAVED:",
+                                blockId
+                            );
+
+
+                        } catch (
+                        error
+                        ) {
+
+                            console.error(
+                                "FAILED TO SAVE BLOCK:",
+                                error
+                            );
 
                         }
 
-                        return block;
+                    },
 
-                    }
-                )
+                    500
 
-            };
+                );
 
-        });
-
-
-        // =========================================
-        // SAVE MERGED YJS CONTENT TO MONGODB
-        // =========================================
-
-        if (
-            saveTimers.current[blockId]
-        ) {
-
-            clearTimeout(
-                saveTimers.current[blockId]
-            );
-
-        }
+        };
 
 
-        saveTimers.current[blockId] =
-            setTimeout(async () => {
-
-                try {
-
-                    const connection =
-                        yjsRef.current;
-
-                    if (!connection) {
-                        return;
-                    }
-
-
-                    const yBlock =
-                        connection.blocks.get(
-                            blockId
-                        );
-
-                    if (!yBlock) {
-                        return;
-                    }
-
-
-                    const yText =
-                        yBlock.get("content");
-
-                    if (!yText) {
-                        return;
-                    }
-
-
-                    // IMPORTANT:
-                    // Read the FINAL merged Yjs value.
-                    const mergedContent =
-                        yText.toString();
-
-
-                    await updateBlock(
-                        blockId,
-                        mergedContent
-                    );
-
-
-                    console.log(
-                        "MERGED BLOCK SAVED:",
-                        blockId,
-                        mergedContent
-                    );
-
-
-                } catch (error) {
-
-                    console.error(
-                        "FAILED TO SAVE MERGED BLOCK:",
-                        error
-                    );
-
-                }
-
-            }, 500);
-
-    };
     // =========================================
     // UNDO
     // =========================================
@@ -1396,12 +2145,9 @@ function Editor() {
 
 
             if (
-                !connection
+                !connection ||
+                !connection.undoManager
             ) {
-
-                console.log(
-                    "YJS CONNECTION NOT AVAILABLE"
-                );
 
                 return;
 
@@ -1421,11 +2167,6 @@ function Editor() {
             }
 
 
-            console.log(
-                "UNDO PERFORMED"
-            );
-
-
             connection.undoManager.undo();
 
         };
@@ -1443,12 +2184,9 @@ function Editor() {
 
 
             if (
-                !connection
+                !connection ||
+                !connection.undoManager
             ) {
-
-                console.log(
-                    "YJS CONNECTION NOT AVAILABLE"
-                );
 
                 return;
 
@@ -1468,177 +2206,268 @@ function Editor() {
             }
 
 
-            console.log(
-                "REDO PERFORMED"
-            );
-
-
             connection.undoManager.redo();
 
         };
-        // =========================================
-// RENDER AST BLOCK
-// =========================================
 
-const renderBlock = (
-    block,
-    depth = 0
-) => {
 
-    const yBlock =
-        yjsRef.current
-            ?.blocks
-            .get(block._id);
+    // =========================================
+    // RENDER AST BLOCK
+    // =========================================
 
-    return (
+    const renderBlock =
+        (
+            block,
+            depth = 0
+        ) => {
 
-        <div
-            key={block._id}
-            style={{
-                marginLeft:
-                    `${depth * 30}px`,
-
-                borderLeft:
-                    depth > 0
-                        ? "2px solid #374151"
-                        : "none",
-
-                paddingLeft:
-                    depth > 0
-                        ? "15px"
-                        : "0",
-
-                marginBottom:
-                    "10px"
-            }}
-        >
-
-            {/* ================================= */}
-            {/* CURRENT BLOCK */}
-            {/* ================================= */}
-
-            <EditableBlock
-
-                draggable={true}
-
-                onDragStart={
-                    (event) =>
-                        handleDragStart(
-                            event,
-                            block._id
-                        )
-                }
-
-                onDragOver={
-                    handleDragOver
-                }
-
-                onDrop={
-                    (event) =>
-                        handleDrop(
-                            event,
-                            block._id
-                        )
-                }
-
-                block={
-                    block
-                }
-
-                yBlock={
-                    yBlock
-                }
-
-                onChange={
-                    handleBlockChange
-                }
-
-                onFocus={
-                    handleBlockFocus
-                }
-
-                onBlur={
-                    handleBlockBlur
-                }
-
-                onDelete={
-                    handleDeleteBlock
-                }
-
-                editingUsers={
-                    activeUsers[
+            const yBlock =
+                yjsRef.current
+                    ?.blocks
+                    .get(
                         block._id
-                    ] || []
-                }
-
-            />
+                    );
 
 
-            {/* ================================= */}
-            {/* CHILD BLOCKS */}
-            {/* ================================= */}
-
-            {block.children &&
-             block.children.length > 0 && (
+            return (
 
                 <div
+                    key={
+                        block._id
+                    }
+
                     style={{
-                        marginTop:
+
+                        marginLeft:
+                            `${depth * 30}px`,
+
+                        borderLeft:
+                            depth > 0
+                                ? "2px solid #374151"
+                                : "none",
+
+                        paddingLeft:
+                            depth > 0
+                                ? "15px"
+                                : "0",
+
+                        marginBottom:
                             "10px"
+
                     }}
                 >
 
-                    {block.children.map(
-                        (child) => {
+                    <EditableBlock
 
-                            /*
-                             * populateAST() returns
-                             * complete child objects.
-                             *
-                             * But if only an ID exists,
-                             * find the block from the
-                             * document.
-                             */
-
-                            const childBlock =
-                                typeof child ===
-                                "object"
-
-                                    ? child
-
-                                    : document.blocks.find(
-                                        (item) =>
-                                            String(
-                                                item._id
-                                            ) ===
-                                            String(
-                                                child
-                                            )
-                                    );
-
-
-                            if (!childBlock) {
-                                return null;
-                            }
-
-
-                            return renderBlock(
-                                childBlock,
-                                depth + 1
-                            );
-
+                        draggable={
+                            true
                         }
-                    )}
+
+                        onDragStart={
+                            (
+                                event
+                            ) =>
+                                handleDragStart(
+                                    event,
+                                    block._id
+                                )
+                        }
+
+                        onDragOver={
+                            handleDragOver
+                        }
+
+                        onDrop={
+                            (
+                                event
+                            ) =>
+                                handleDrop(
+                                    event,
+                                    block._id
+                                )
+                        }
+
+                        block={
+                            block
+                        }
+
+                        yBlock={
+                            yBlock
+                        }
+
+                        onChange={
+                            handleBlockChange
+                        }
+
+                        onFocus={
+                            handleBlockFocus
+                        }
+
+                        onBlur={
+                            handleBlockBlur
+                        }
+
+                        onDelete={
+                            handleDeleteBlock
+                        }
+
+                        editingUsers={
+                            activeUsers[
+                            block._id
+                            ] || []
+                        }
+
+                    />
+
+
+                    {/* ================================= */}
+                    {/* AST CHILD BUTTON */}
+                    {/* ================================= */}
+
+                    {document.blocks.some(
+                        (
+                            candidate
+                        ) =>
+                            String(
+                                candidate._id
+                            ) !==
+                            String(
+                                block._id
+                            )
+                    ) && (
+
+                            <button
+
+                                onClick={() => {
+
+                                    const child =
+                                        document.blocks.find(
+                                            (
+                                                candidate
+                                            ) =>
+                                                String(
+                                                    candidate._id
+                                                ) !==
+                                                String(
+                                                    block._id
+                                                )
+                                        );
+
+
+                                    if (
+                                        child
+                                    ) {
+
+                                        handleAddChild(
+                                            block._id,
+                                            child._id
+                                        );
+
+                                    }
+
+                                }}
+
+                                style={{
+                                    marginTop:
+                                        "5px",
+
+                                    marginBottom:
+                                        "10px",
+
+                                    padding:
+                                        "5px 10px",
+
+                                    background:
+                                        "#2563eb",
+
+                                    color:
+                                        "white",
+
+                                    border:
+                                        "none",
+
+                                    borderRadius:
+                                        "5px",
+
+                                    cursor:
+                                        "pointer"
+                                }}
+                            >
+
+                                + Make another block a child
+
+                            </button>
+
+                        )}
+
+
+                    {/* ================================= */}
+                    {/* CHILD BLOCKS */}
+                    {/* ================================= */}
+
+                    {block.children &&
+                        block.children.length > 0 && (
+
+                            <div
+                                style={{
+                                    marginTop:
+                                        "10px"
+                                }}
+                            >
+
+                                {block.children.map(
+                                    (
+                                        child
+                                    ) => {
+
+                                        const childId =
+                                            typeof child ===
+                                                "object"
+                                                ? child._id
+                                                : child;
+
+
+                                        const childBlock =
+                                            document.blocks.find(
+                                                (
+                                                    item
+                                                ) =>
+                                                    String(
+                                                        item._id
+                                                    ) ===
+                                                    String(
+                                                        childId
+                                                    )
+                                            );
+
+
+                                        if (
+                                            !childBlock
+                                        ) {
+
+                                            return null;
+
+                                        }
+
+
+                                        return renderBlock(
+                                            childBlock,
+                                            depth + 1
+                                        );
+
+                                    }
+                                )}
+
+                            </div>
+
+                        )}
 
                 </div>
 
-            )}
+            );
 
-        </div>
+        };
 
-    );
-
-};
 
     // =========================================
     // LOADING
@@ -1712,6 +2541,7 @@ const renderBlock = (
 
             <div
                 style={{
+
                     display:
                         "flex",
 
@@ -1723,6 +2553,7 @@ const renderBlock = (
 
                     flexWrap:
                         "wrap"
+
                 }}
             >
 
@@ -1733,7 +2564,9 @@ const renderBlock = (
                         )
                     }
                 >
+
                     + Paragraph
+
                 </button>
 
 
@@ -1744,7 +2577,9 @@ const renderBlock = (
                         )
                     }
                 >
+
                     + Heading
+
                 </button>
 
 
@@ -1755,7 +2590,9 @@ const renderBlock = (
                         )
                     }
                 >
+
                     + Code
+
                 </button>
 
 
@@ -1766,7 +2603,9 @@ const renderBlock = (
                         )
                     }
                 >
+
                     + Bullet
+
                 </button>
 
 
@@ -1775,7 +2614,9 @@ const renderBlock = (
                         handleUndo
                     }
                 >
+
                     ↶ Undo
+
                 </button>
 
 
@@ -1784,7 +2625,9 @@ const renderBlock = (
                         handleRedo
                     }
                 >
+
                     ↷ Redo
+
                 </button>
 
             </div>
@@ -1796,32 +2639,25 @@ const renderBlock = (
 
             <div
                 style={{
-                    marginBottom:
-                        "20px",
-
-                    padding:
-                        "10px",
-
+                    marginBottom: "20px",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    width: "fit-content",
                     background:
-                        "#1f2937",
-
-                    color:
-                        "white",
-
-                    borderRadius:
-                        "8px",
-
-                    width:
-                        "fit-content"
+                        connectionStatus === "connected"
+                            ? "#14532d"
+                            : connectionStatus === "connecting"
+                                ? "#854d0e"
+                                : "#7f1d1d",
+                    color: "white",
+                    fontWeight: "bold"
                 }}
             >
+                {connectionStatus === "connected" && "🟢 Connected"}
 
-                Editing as:{" "}
+                {connectionStatus === "connecting" && "🟡 Connecting..."}
 
-                <strong>
-                    {currentUser}
-                </strong>
-
+                {connectionStatus === "disconnected" && "🔴 Disconnected"}
             </div>
 
 
@@ -1831,6 +2667,7 @@ const renderBlock = (
 
             <div
                 style={{
+
                     display:
                         "flex",
 
@@ -1845,6 +2682,7 @@ const renderBlock = (
 
                     flexWrap:
                         "wrap"
+
                 }}
             >
 
@@ -1860,6 +2698,7 @@ const renderBlock = (
                     ) => (
 
                         <span
+
                             key={
                                 user.name +
                                 index
@@ -1881,7 +2720,6 @@ const renderBlock = (
                         >
 
                             🟢{" "}
-
                             {user.name}
 
                         </span>
@@ -1893,124 +2731,35 @@ const renderBlock = (
 
 
             {/* ================================= */}
-            {/* BLOCKS */}
+            {/* AST DOCUMENT */}
             {/* ================================= */}
 
-            {document.blocks.map(
-                (
-                    block
-                ) => {
+            <div>
 
-                    const yBlock =
-                        yjsRef.current
-                            ?.blocks
-                            .get(
-                                block._id
-                            );
+                {document.blocks
+                    .filter(
+                        (
+                            block
+                        ) =>
+                            !block.parentId
+                    )
+                    .map(
+                        (
+                            block
+                        ) =>
+                            renderBlock(
+                                block,
+                                0
+                            )
+                    )}
 
+            </div>
 
-                    return (
-
-                        <div
-                            key={block._id}
-                            style={{
-                                marginBottom: "15px"
-                            }}
-                        >
-
-                            <EditableBlock
-
-                                draggable={true}
-
-                                onDragStart={
-                                    (event) =>
-                                        handleDragStart(
-                                            event,
-                                            block._id
-                                        )
-                                }
-
-                                onDragOver={
-                                    handleDragOver
-                                }
-
-                                onDrop={
-                                    (event) =>
-                                        handleDrop(
-                                            event,
-                                            block._id
-                                        )
-                                }
-
-                                block={
-                                    block
-                                }
-
-                                yBlock={
-                                    yBlock
-                                }
-
-                                onChange={
-                                    handleBlockChange
-                                }
-
-                                onFocus={
-                                    handleBlockFocus
-                                }
-
-                                onBlur={
-                                    handleBlockBlur
-                                }
-
-                                onDelete={
-                                    handleDeleteBlock
-                                }
-
-                                editingUsers={
-                                    activeUsers[
-                                    block._id
-                                    ] || []
-                                }
-
-                            />
-
-                            {/* ================================= */}
-                            {/* AST CHILD BUTTON */}
-                            {/* ================================= */}
-
-                            <button
-                                onClick={() => {
-                                    const child =
-                                        document.blocks.find(
-                                            (candidate) =>
-                                                candidate._id !==
-                                                block._id
-                                        );
-                                    if (child) {
-                                        handleAddChild(
-                                            block._id,
-                                            child._id
-                                        );
-                                    }
-                                }}
-                                style={{
-                                    marginTop: "5px",
-                                    marginBottom: "15px",
-                                    padding: "5px 10px",
-                                    background: "#2563eb",
-                                    color: "white",
-                                    border: "none",
-                                    borderRadius: "5px",
-                                    cursor: "pointer"
-                                }}
-                            >
-                                + Make another block a child
-                            </button>
-                        </div>
-                    );
-                }
-            )}
         </div>
+
     );
+
 }
+
+
 export default Editor;
