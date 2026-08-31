@@ -4,7 +4,10 @@ import {
     createBlock,
     deleteBlock,
     updateBlockChildren,
-    reorderBlocks
+    reorderBlocks,
+    createVersion,
+    getVersions,
+    restoreVersion
 } from "../services/documentService";
 
 import EditableBlock from "../components/EditableBlock";
@@ -44,17 +47,45 @@ function Editor() {
     // STATE
     // =========================================
 
-    const [onlineUsers, setOnlineUsers] =
-        useState([]);
+    const [
+        document,
+        setDocument
+    ] = useState(null);
 
-    const [activeUsers, setActiveUsers] =
-        useState({});
+    const [
+        loading,
+        setLoading
+    ] = useState(true);
 
-    const [draggedBlockId, setDraggedBlockId] =
-        useState(null);
+    const [
+        onlineUsers,
+        setOnlineUsers
+    ] = useState([]);
 
-    const [connectionStatus, setConnectionStatus] =
-        useState("connecting");
+    const [
+        activeUsers,
+        setActiveUsers
+    ] = useState({});
+
+    const [
+        draggedBlockId,
+        setDraggedBlockId
+    ] = useState(null);
+
+    const [
+        connectionStatus,
+        setConnectionStatus
+    ] = useState("connecting");
+    const [
+        versions,
+        setVersions
+    ] = useState([]);
+
+    const [
+        showVersions,
+        setShowVersions
+    ] = useState(false);
+
 
     // =========================================
     // REFS
@@ -63,9 +94,100 @@ function Editor() {
     const saveTimers =
         useRef({});
 
-
     const yjsRef =
         useRef(null);
+    const blockObserversRef = useRef(new Map());
+    // =========================================
+    // OBSERVE YJS BLOCK METADATA
+    // =========================================
+
+    const observeYBlock = (blockId, yBlock) => {
+
+        if (!yBlock) {
+            return;
+        }
+
+        // Don't attach twice
+        if (
+            blockObserversRef.current.has(blockId)
+        ) {
+            return;
+        }
+
+        const observer = (event) => {
+
+            const changedKeys =
+                Array.from(
+                    event.keysChanged
+                );
+
+            if (
+                !changedKeys.includes("parentId") &&
+                !changedKeys.includes("children")
+            ) {
+                return;
+            }
+
+            const newParentId =
+                yBlock.get("parentId") || null;
+
+            const newChildren =
+                yBlock.get("children") || [];
+
+            console.log(
+                "REMOTE AST CHANGE:",
+                {
+                    blockId,
+                    parentId: newParentId,
+                    children: newChildren
+                }
+            );
+
+            setDocument((previousDocument) => {
+
+                if (!previousDocument) {
+                    return previousDocument;
+                }
+
+                return {
+                    ...previousDocument,
+
+                    blocks:
+                        previousDocument.blocks.map(
+                            (block) => {
+
+                                if (
+                                    String(block._id) ===
+                                    String(blockId)
+                                ) {
+
+                                    return {
+                                        ...block,
+                                        parentId:
+                                            newParentId,
+                                        children:
+                                            newChildren
+                                    };
+
+                                }
+
+                                return block;
+
+                            }
+                        )
+                };
+
+            });
+
+        };
+
+        yBlock.observe(observer);
+
+        blockObserversRef.current.set(
+            blockId,
+            observer
+        );
+    };
 
 
     // =========================================
@@ -81,54 +203,43 @@ function Editor() {
         let handleBlocksChange = null;
 
 
-        const loadDocument =
-            async () => {
+        const loadDocument = async () => {
 
-                try {
+            try {
 
-                    console.log(
-                        "CALLING DOCUMENT API..."
+                // =================================
+                // GET DOCUMENT
+                // =================================
+
+                const data =
+                    await getDocument(
+                        DOCUMENT_ID
                     );
 
 
-                    // =================================
-                    // GET DOCUMENT
-                    // =================================
+                if (
+                    !data ||
+                    !data.document
+                ) {
 
-                    const data =
-                        await getDocument(
-                            DOCUMENT_ID
-                        );
+                    setDocument(null);
 
+                    return;
 
-                    console.log(
-                        "DOCUMENT RECEIVED:",
-                        data
-                    );
+                }
 
 
-                    if (
-                        !data ||
-                        !data.document
-                    ) {
-
-                        setDocument(null);
-
-                        return;
-
-                    }
+                setDocument(
+                    data.document
+                );
 
 
-                    setDocument(
-                        data.document
-                    );
+                // =================================
+                // CREATE YJS CONNECTION
+                // =================================
 
-
-                    // =================================
-                    // CREATE YJS CONNECTION
-                    // =================================
-
-                    connection = createYjsConnection(
+                connection =
+                    createYjsConnection(
                         DOCUMENT_ID,
                         currentUser,
                         (status) => {
@@ -140,448 +251,468 @@ function Editor() {
                         }
                     );
 
-                    yjsRef.current =
-                        connection;
+
+                yjsRef.current =
+                    connection;
 
 
-                    console.log(
-                        "YJS CONNECTION CREATED"
-                    );
+                const {
+                    blocks,
+                    awareness
+                } = connection;
 
 
-                    const {
-                        blocks,
-                        awareness
-                    } = connection;
+                // =================================
+                // ONLINE USERS
+                // =================================
+
+                updateOnlineUsers =
+                    () => {
+
+                        const states =
+                            Array.from(
+                                awareness
+                                    .getStates()
+                                    .values()
+                            );
 
 
-                    // =================================
-                    // ONLINE USERS
-                    // =================================
+                        const users =
+                            states
+                                .map(
+                                    (state) => {
 
-                    updateOnlineUsers =
-                        () => {
+                                        if (
+                                            !state.user
+                                        ) {
 
-                            const states =
-                                Array.from(
-                                    awareness
-                                        .getStates()
-                                        .values()
+                                            return null;
+
+                                        }
+
+
+                                        return {
+
+                                            name:
+                                                state.user.name,
+
+                                            editingBlock:
+                                                state.editingBlock ||
+                                                null
+
+                                        };
+
+                                    }
+                                )
+                                .filter(
+                                    Boolean
                                 );
 
 
-                            const users =
-                                states
-                                    .map(
+                        setOnlineUsers(
+                            users
+                        );
+
+
+                        // =================================
+                        // ACTIVE EDITING USERS
+                        // =================================
+
+                        const editing = {};
+
+
+                        users.forEach(
+                            (user) => {
+
+                                if (
+                                    !user.editingBlock
+                                ) {
+
+                                    return;
+
+                                }
+
+
+                                if (
+                                    !editing[
+                                    user.editingBlock
+                                    ]
+                                ) {
+
+                                    editing[
+                                        user.editingBlock
+                                    ] = [];
+
+                                }
+
+
+                                editing[
+                                    user.editingBlock
+                                ].push({
+
+                                    name:
+                                        user.name
+
+                                });
+
+                            }
+                        );
+
+
+                        setActiveUsers(
+                            editing
+                        );
+
+                    };
+
+
+                awareness.on(
+                    "change",
+                    updateOnlineUsers
+                );
+
+
+                updateOnlineUsers();
+
+
+                // =================================
+                // YJS BLOCK ADD / DELETE
+                // =================================
+
+                handleBlocksChange =
+                    (event) => {
+
+                        event.changes.keys.forEach(
+                            (
+                                change,
+                                blockId
+                            ) => {
+
+                                // =============================
+                                // NEW BLOCK
+                                // =============================
+
+                                if (
+                                    change.action ===
+                                    "add"
+                                ) {
+
+                                    const yBlock =
+                                        blocks.get(
+                                            blockId
+                                        );
+
+
+                                    if (
+                                        !yBlock
+                                    ) {
+
+                                        return;
+
+                                    }
+                                    observeYBlock(
+                                        blockId,
+                                        yBlock
+                                    );
+
+
+                                    const yText =
+                                        yBlock.get(
+                                            "content"
+                                        );
+
+
+                                    if (
+                                        yText
+                                    ) {
+
+                                        connection
+                                            .registerTextForUndo(
+                                                yText
+                                            );
+
+                                    }
+
+
+                                    const children =
+                                        yBlock.get(
+                                            "children"
+                                        ) || [];
+
+
+                                    const newBlock = {
+
+                                        _id:
+                                            blockId,
+
+                                        type:
+                                            yBlock.get(
+                                                "type"
+                                            ) ||
+                                            "paragraph",
+
+                                        content:
+                                            yText
+                                                ? yText.toString()
+                                                : "",
+
+                                        level:
+                                            yBlock.get(
+                                                "level"
+                                            ) ||
+                                            0,
+
+                                        language:
+                                            yBlock.get(
+                                                "language"
+                                            ) ||
+                                            null,
+
+                                        parentId:
+                                            yBlock.get(
+                                                "parentId"
+                                            ) ||
+                                            null,
+
+                                        children
+
+                                    };
+
+
+                                    setDocument(
                                         (
-                                            state
+                                            previousDocument
                                         ) => {
 
                                             if (
-                                                !state.user
+                                                !previousDocument
                                             ) {
 
-                                                return null;
+                                                return previousDocument;
+
+                                            }
+
+
+                                            const exists =
+                                                previousDocument
+                                                    .blocks
+                                                    .some(
+                                                        (
+                                                            block
+                                                        ) =>
+                                                            String(
+                                                                block._id
+                                                            ) ===
+                                                            String(
+                                                                blockId
+                                                            )
+                                                    );
+
+
+                                            if (
+                                                exists
+                                            ) {
+
+                                                return previousDocument;
 
                                             }
 
 
                                             return {
 
-                                                name:
-                                                    state.user.name,
+                                                ...previousDocument,
 
-                                                editingBlock:
-                                                    state.editingBlock ||
-                                                    null
+                                                blocks:
+                                                    [
+                                                        ...previousDocument.blocks,
+                                                        newBlock
+                                                    ]
 
                                             };
 
                                         }
-                                    )
-                                    .filter(
-                                        Boolean
                                     );
 
-
-                            console.log(
-                                "ONLINE USERS:",
-                                users
-                            );
-
-
-                            setOnlineUsers(
-                                users
-                            );
-
-
-                            // =================================
-                            // ACTIVE EDITING USERS
-                            // =================================
-
-                            const editing =
-                                {};
-
-
-                            users.forEach(
-                                (
-                                    user
-                                ) => {
-
-                                    if (
-                                        !user.editingBlock
-                                    ) {
-
-                                        return;
-
-                                    }
-
-
-                                    if (
-                                        !editing[
-                                        user.editingBlock
-                                        ]
-                                    ) {
-
-                                        editing[
-                                            user.editingBlock
-                                        ] = [];
-
-                                    }
-
-
-                                    editing[
-                                        user.editingBlock
-                                    ].push({
-
-                                        name:
-                                            user.name
-
-                                    });
-
                                 }
-                            );
 
 
-                            setActiveUsers(
-                                editing
-                            );
+                                // =============================
+                                // DELETE BLOCK
+                                // =============================
 
-                        };
+                                if (
+                                    change.action ===
+                                    "delete"
+                                ) {
 
+                                    setDocument(
+                                        (
+                                            previousDocument
+                                        ) => {
 
-                    awareness.on(
-                        "change",
-                        updateOnlineUsers
-                    );
+                                            if (
+                                                !previousDocument
+                                            ) {
 
+                                                return previousDocument;
 
-                    updateOnlineUsers();
-
-
-                    // =================================
-                    // YJS BLOCK ADD / DELETE
-                    // =================================
-
-                    handleBlocksChange =
-                        (event) => {
-
-                            event.changes.keys.forEach(
-                                (
-                                    change,
-                                    blockId
-                                ) => {
-
-                                    // =================================
-                                    // NEW BLOCK
-                                    // =================================
-
-                                    if (
-                                        change.action ===
-                                        "add"
-                                    ) {
-
-                                        const yBlock =
-                                            blocks.get(
-                                                blockId
-                                            );
+                                            }
 
 
-                                        if (
-                                            !yBlock
-                                        ) {
+                                            return {
 
-                                            return;
+                                                ...previousDocument,
 
-                                        }
-
-
-                                        const yText =
-                                            yBlock.get(
-                                                "content"
-                                            );
-
-
-                                        if (
-                                            yText
-                                        ) {
-
-                                            connection
-                                                .registerTextForUndo(
-                                                    yText
-                                                );
-
-                                        }
-
-
-                                        const newBlock = {
-
-                                            _id:
-                                                blockId,
-
-                                            type:
-                                                yBlock.get(
-                                                    "type"
-                                                ) ||
-                                                "paragraph",
-
-                                            content:
-                                                yText
-                                                    ? yText.toString()
-                                                    : "",
-
-                                            level:
-                                                yBlock.get(
-                                                    "level"
-                                                ) ||
-                                                0,
-
-                                            language:
-                                                yBlock.get(
-                                                    "language"
-                                                ) ||
-                                                null,
-
-                                            parentId:
-                                                yBlock.get(
-                                                    "parentId"
-                                                ) ||
-                                                null,
-
-                                            children:
-                                                yBlock.get(
-                                                    "children"
-                                                ) || []
-
-                                        };
-
-
-                                        setDocument(
-                                            (
-                                                previousDocument
-                                            ) => {
-
-                                                if (
-                                                    !previousDocument
-                                                ) {
-
-                                                    return previousDocument;
-
-                                                }
-
-
-                                                const exists =
+                                                blocks:
                                                     previousDocument
                                                         .blocks
-                                                        .some(
+                                                        .filter(
                                                             (
                                                                 block
                                                             ) =>
                                                                 String(
                                                                     block._id
-                                                                ) ===
+                                                                ) !==
                                                                 String(
                                                                     blockId
                                                                 )
-                                                        );
+                                                        )
 
+                                            };
 
-                                                if (
-                                                    exists
-                                                ) {
-
-                                                    return previousDocument;
-
-                                                }
-
-
-                                                return {
-
-                                                    ...previousDocument,
-
-                                                    blocks:
-                                                        [
-                                                            ...previousDocument.blocks,
-
-                                                            newBlock
-                                                        ]
-
-                                                };
-
-                                            }
-                                        );
-
-                                    }
-
-
-                                    // =================================
-                                    // DELETE BLOCK
-                                    // =================================
-
-                                    if (
-                                        change.action ===
-                                        "delete"
-                                    ) {
-
-                                        setDocument(
-                                            (
-                                                previousDocument
-                                            ) => {
-
-                                                if (
-                                                    !previousDocument
-                                                ) {
-
-                                                    return previousDocument;
-
-                                                }
-
-
-                                                return {
-
-                                                    ...previousDocument,
-
-                                                    blocks:
-                                                        previousDocument
-                                                            .blocks
-                                                            .filter(
-                                                                (
-                                                                    block
-                                                                ) =>
-                                                                    String(
-                                                                        block._id
-                                                                    ) !==
-                                                                    String(
-                                                                        blockId
-                                                                    )
-                                                            )
-
-                                                };
-
-                                            }
-                                        );
-
-                                    }
+                                        }
+                                    );
 
                                 }
-                            );
 
-                        };
-
-
-                    blocks.observe(
-                        handleBlocksChange
-                    );
-
-
-                    // =================================
-                    // INITIALIZE YJS
-                    // =================================
-
-                    if (
-                        blocks.size === 0
-                    ) {
-
-                        console.log(
-                            "INITIALIZING YJS FROM MONGODB"
+                            }
                         );
 
-
-                        data.document.blocks.forEach(
-                            (
-                                block
-                            ) => {
-
-                                const yBlock =
-                                    new Y.Map();
+                    };
 
 
-                                yBlock.set(
-                                    "type",
-                                    block.type
-                                );
+                blocks.observe(
+                    handleBlocksChange
+                );
 
 
-                                yBlock.set(
-                                    "level",
-                                    block.level ||
-                                    0
-                                );
+                // =================================
+                // INITIALIZE YJS
+                // =================================
+
+                if (
+                    blocks.size === 0
+                ) {
+
+                    data.document.blocks.forEach(
+                        (
+                            block
+                        ) => {
+
+                            const yBlock =
+                                new Y.Map();
 
 
-                                yBlock.set(
-                                    "language",
-                                    block.language ||
-                                    null
-                                );
+                            yBlock.set(
+                                "type",
+                                block.type
+                            );
 
 
-                                yBlock.set(
-                                    "parentId",
-                                    block.parentId ||
-                                    null
-                                );
+                            yBlock.set(
+                                "level",
+                                block.level ||
+                                0
+                            );
 
 
-                                yBlock.set(
-                                    "children",
+                            yBlock.set(
+                                "language",
+                                block.language ||
+                                null
+                            );
+
+
+                            yBlock.set(
+                                "parentId",
+                                block.parentId ||
+                                null
+                            );
+
+
+                            yBlock.set(
+                                "children",
+                                (
+                                    block.children ||
+                                    []
+                                ).map(
                                     (
-                                        block.children ||
-                                        []
-                                    ).map(
-                                        (
-                                            child
-                                        ) =>
-                                            typeof child ===
-                                                "object"
-                                                ? child._id
-                                                : child
-                                    )
-                                );
+                                        child
+                                    ) =>
+                                        typeof child ===
+                                            "object"
+                                            ? child._id
+                                            : child
+                                )
+                            );
 
 
-                                const yText =
-                                    new Y.Text();
+                            const yText =
+                                new Y.Text();
 
 
-                                yText.insert(
-                                    0,
-                                    block.content ||
-                                    ""
-                                );
+                            yText.insert(
+                                0,
+                                block.content ||
+                                ""
+                            );
 
 
-                                yBlock.set(
-                                    "content",
+                            yBlock.set(
+                                "content",
+                                yText
+                            );
+
+
+                            blocks.set(
+                                block._id,
+                                yBlock
+                            );
+                            observeYBlock(
+                                block._id,
+                                yBlock
+                            );
+
+
+                            connection
+                                .registerTextForUndo(
                                     yText
                                 );
 
+                        }
+                    );
 
-                                blocks.set(
-                                    block._id,
-                                    yBlock
+                } else {
+
+                    blocks.forEach(
+                        (
+                            yBlock,
+                            blockId
+                        ) => {
+
+                            // Observe parentId / children
+                            observeYBlock(
+                                blockId,
+                                yBlock
+                            );
+
+                            // Register text for undo
+                            const yText =
+                                yBlock.get(
+                                    "content"
                                 );
 
+                            if (yText) {
 
                                 connection
                                     .registerTextForUndo(
@@ -589,66 +720,30 @@ function Editor() {
                                     );
 
                             }
-                        );
 
-                    } else {
-
-                        // =================================
-                        // REGISTER EXISTING TEXT
-                        // =================================
-
-                        blocks.forEach(
-                            (
-                                yBlock
-                            ) => {
-
-                                const yText =
-                                    yBlock.get(
-                                        "content"
-                                    );
-
-
-                                if (
-                                    yText
-                                ) {
-
-                                    connection
-                                        .registerTextForUndo(
-                                            yText
-                                        );
-
-                                }
-
-                            }
-                        );
-
-                    }
-
-
-                    console.log(
-                        "YJS BLOCKS:",
-                        blocks.toJSON()
-                    );
-
-
-                } catch (
-                error
-                ) {
-
-                    console.error(
-                        "FAILED TO LOAD DOCUMENT:",
-                        error
-                    );
-
-                } finally {
-
-                    setLoading(
-                        false
+                        }
                     );
 
                 }
 
-            };
+            } catch (
+            error
+            ) {
+
+                console.error(
+                    "FAILED TO LOAD DOCUMENT:",
+                    error
+                );
+
+            } finally {
+
+                setLoading(
+                    false
+                );
+
+            }
+
+        };
 
 
         loadDocument();
@@ -659,11 +754,6 @@ function Editor() {
         // =========================================
 
         return () => {
-
-            console.log(
-                "CLEANING UP EDITOR"
-            );
-
 
             if (
                 connection
@@ -697,6 +787,29 @@ function Editor() {
                         "editingBlock",
                         null
                     );
+                blockObserversRef.current.forEach(
+                    (
+                        observer,
+                        blockId
+                    ) => {
+
+                        const yBlock =
+                            connection.blocks.get(
+                                blockId
+                            );
+
+                        if (yBlock) {
+
+                            yBlock.unobserve(
+                                observer
+                            );
+
+                        }
+
+                    }
+                );
+
+                blockObserversRef.current.clear();
 
 
                 connection.destroy();
@@ -754,10 +867,6 @@ function Editor() {
                 };
 
 
-                // =================================
-                // CREATE IN MONGODB
-                // =================================
-
                 const data =
                     await createBlock(
                         blockData
@@ -776,18 +885,10 @@ function Editor() {
                     !connection
                 ) {
 
-                    console.error(
-                        "YJS CONNECTION NOT AVAILABLE"
-                    );
-
                     return;
 
                 }
 
-
-                // =================================
-                // CREATE YJS BLOCK
-                // =================================
 
                 const yBlock =
                     new Y.Map();
@@ -815,7 +916,6 @@ function Editor() {
 
                 yBlock.set(
                     "parentId",
-                    newBlock.parentId ||
                     null
                 );
 
@@ -836,29 +936,20 @@ function Editor() {
                 );
 
 
-                // =================================
-                // REGISTER UNDO
-                // =================================
-
                 connection.registerTextForUndo(
                     yText
                 );
 
 
-                // =================================
-                // ADD TO YJS
-                // =================================
-
                 connection.blocks.set(
                     newBlock._id,
                     yBlock
                 );
-
-
-                console.log(
-                    "BLOCK ADDED:",
-                    newBlock._id
+                observeYBlock(
+                    newBlock._id,
+                    yBlock
                 );
+
 
             } catch (
             error
@@ -904,11 +995,6 @@ function Editor() {
 
                 }
 
-
-                console.log(
-                    "BLOCK DELETED:",
-                    blockId
-                );
 
             } catch (
             error
@@ -970,117 +1056,68 @@ function Editor() {
 
 
     // =========================================
-    // DROP BLOCK
+    // CHECK DESCENDANT
     // =========================================
 
-    // =========================================
-    // DROP BLOCK
-    // =========================================
-
-    const handleDrop = async (
-        event,
-        targetBlockId
-    ) => {
-
-        event.preventDefault();
-
-        const sourceBlockId =
-            event.dataTransfer.getData(
-                "text/plain"
-            );
-
-        // -----------------------------------------
-        // INVALID DROP
-        // -----------------------------------------
-
-        if (
-            !sourceBlockId ||
-            sourceBlockId === targetBlockId
-        ) {
-
-            setDraggedBlockId(null);
-
-            return;
-        }
-
-
-        if (!document) {
-
-            setDraggedBlockId(null);
-
-            return;
-        }
-
-
-        const sourceBlock =
-            document.blocks.find(
-                (block) =>
-                    String(block._id) ===
-                    String(sourceBlockId)
-            );
-
-
-        const targetBlock =
-            document.blocks.find(
-                (block) =>
-                    String(block._id) ===
-                    String(targetBlockId)
-            );
-
-
-        if (
-            !sourceBlock ||
-            !targetBlock
-        ) {
-
-            setDraggedBlockId(null);
-
-            return;
-        }
-
-
-        // -----------------------------------------
-        // PREVENT CIRCULAR AST
-        // -----------------------------------------
-
-        const isDescendant = (
+    const isDescendant =
+        (
             parentId,
             possibleChildId
         ) => {
 
-            const parent =
-                document.blocks.find(
-                    (block) =>
-                        String(block._id) ===
-                        String(parentId)
-                );
+            if (
+                !document
+            ) {
 
-
-            if (!parent) {
                 return false;
+
             }
 
 
-            const children =
-                parent.children || [];
+            const parent =
+                document.blocks.find(
+                    (block) =>
+                        String(
+                            block._id
+                        ) ===
+                        String(
+                            parentId
+                        )
+                );
+
+
+            if (
+                !parent
+            ) {
+
+                return false;
+
+            }
 
 
             for (
-                const child of children
+                const child
+                of parent.children || []
             ) {
 
                 const childId =
-                    typeof child === "object"
+                    typeof child ===
+                        "object"
                         ? child._id
                         : child;
 
 
                 if (
-                    String(childId) ===
-                    String(possibleChildId)
+                    String(
+                        childId
+                    ) ===
+                    String(
+                        possibleChildId
+                    )
                 ) {
 
                     return true;
+
                 }
 
 
@@ -1092,6 +1129,7 @@ function Editor() {
                 ) {
 
                     return true;
+
                 }
 
             }
@@ -1102,297 +1140,35 @@ function Editor() {
         };
 
 
-        // Don't allow:
-        //
-        // A
-        //  └── B
-        //
-        // B → A
-        //
-        if (
-            isDescendant(
-                sourceBlockId,
-                targetBlockId
-            )
-        ) {
+    // =========================================
+    // UPDATE YJS RELATIONSHIP
+    // =========================================
 
-            console.warn(
-                "Cannot create circular AST"
-            );
+    const updateYjsRelationship =
+        (
+            sourceBlockId,
+            newParentId,
+            newParentChildren,
+            oldParentId,
+            oldParentChildren
+        ) => {
 
-            setDraggedBlockId(null);
-
-            return;
-        }
+            const connection =
+                yjsRef.current;
 
 
-        // -----------------------------------------
-        // CURRENT PARENT OF SOURCE
-        // -----------------------------------------
+            if (
+                !connection
+            ) {
 
-        const oldParentId =
-            sourceBlock.parentId || null;
-
-
-        // -----------------------------------------
-        // REMOVE SOURCE FROM OLD PARENT
-        // -----------------------------------------
-
-        if (oldParentId) {
-
-            const oldParent =
-                document.blocks.find(
-                    (block) =>
-                        String(block._id) ===
-                        String(oldParentId)
-                );
-
-
-            if (oldParent) {
-
-                const oldChildren =
-                    (
-                        oldParent.children ||
-                        []
-                    );
-
-
-                const updatedOldChildren =
-                    oldChildren
-                        .map(
-                            (child) =>
-                                typeof child ===
-                                    "object"
-                                    ? child._id
-                                    : child
-                        )
-                        .filter(
-                            (childId) =>
-                                String(childId) !==
-                                String(sourceBlockId)
-                        );
-
-
-                await updateBlockChildren(
-                    oldParentId,
-                    updatedOldChildren
-                );
+                return;
 
             }
 
-        }
-
-
-        // -----------------------------------------
-        // ADD SOURCE TO TARGET CHILDREN
-        // -----------------------------------------
-
-        const targetChildren =
-            (
-                targetBlock.children ||
-                []
-            )
-                .map(
-                    (child) =>
-                        typeof child === "object"
-                            ? child._id
-                            : child
-                )
-                .filter(
-                    (childId) =>
-                        String(childId) !==
-                        String(sourceBlockId)
-                );
-
-
-        targetChildren.push(
-            sourceBlockId
-        );
-
-
-        // -----------------------------------------
-        // UPDATE TARGET CHILDREN
-        // -----------------------------------------
-
-        await updateBlockChildren(
-            targetBlockId,
-            targetChildren
-        );
-
-
-        // -----------------------------------------
-        // UPDATE SOURCE PARENT
-        // -----------------------------------------
-
-        const sourceResponse =
-            await fetch(
-                `http://localhost:5000/api/blocks/${sourceBlockId}`,
-                {
-                    method: "PUT",
-
-                    headers: {
-                        "Content-Type":
-                            "application/json"
-                    },
-
-                    body: JSON.stringify({
-                        parentId:
-                            targetBlockId
-                    })
-                }
-            );
-
-
-        if (
-            !sourceResponse.ok
-        ) {
-
-            throw new Error(
-                "Failed to update block parent"
-            );
-
-        }
-
-
-        // -----------------------------------------
-        // UPDATE LOCAL STATE
-        // -----------------------------------------
-
-        setDocument(
-            (previousDocument) => {
-
-                if (
-                    !previousDocument
-                ) {
-
-                    return previousDocument;
-                }
-
-
-                return {
-
-                    ...previousDocument,
-
-                    blocks:
-                        previousDocument.blocks.map(
-                            (block) => {
-
-                                // SOURCE BLOCK
-                                if (
-                                    String(
-                                        block._id
-                                    ) ===
-                                    String(
-                                        sourceBlockId
-                                    )
-                                ) {
-
-                                    return {
-
-                                        ...block,
-
-                                        parentId:
-                                            targetBlockId
-
-                                    };
-
-                                }
-
-
-                                // TARGET BLOCK
-                                if (
-                                    String(
-                                        block._id
-                                    ) ===
-                                    String(
-                                        targetBlockId
-                                    )
-                                ) {
-
-                                    return {
-
-                                        ...block,
-
-                                        children:
-                                            targetChildren
-
-                                    };
-
-                                }
-
-
-                                // OLD PARENT
-                                if (
-                                    oldParentId &&
-                                    String(
-                                        block._id
-                                    ) ===
-                                    String(
-                                        oldParentId
-                                    )
-                                ) {
-
-                                    return {
-
-                                        ...block,
-
-                                        children:
-                                            (
-                                                block.children ||
-                                                []
-                                            )
-                                                .map(
-                                                    (child) =>
-                                                        typeof child ===
-                                                            "object"
-                                                            ? child._id
-                                                            : child
-                                                )
-                                                .filter(
-                                                    (childId) =>
-                                                        String(
-                                                            childId
-                                                        ) !==
-                                                        String(
-                                                            sourceBlockId
-                                                        )
-                                                )
-
-                                    };
-
-                                }
-
-
-                                return block;
-
-                            }
-                        )
-
-                };
-
-            }
-        );
-
-
-        // -----------------------------------------
-        // UPDATE YJS
-        // -----------------------------------------
-
-        const connection =
-            yjsRef.current;
-
-
-        if (connection) {
 
             const sourceYBlock =
                 connection.blocks.get(
                     sourceBlockId
-                );
-
-
-            const targetYBlock =
-                connection.blocks.get(
-                    targetBlockId
                 );
 
 
@@ -1402,20 +1178,32 @@ function Editor() {
 
                 sourceYBlock.set(
                     "parentId",
-                    targetBlockId
+                    newParentId
                 );
 
             }
 
 
             if (
-                targetYBlock
+                newParentId
             ) {
 
-                targetYBlock.set(
-                    "children",
-                    targetChildren
-                );
+                const newParentYBlock =
+                    connection.blocks.get(
+                        newParentId
+                    );
+
+
+                if (
+                    newParentYBlock
+                ) {
+
+                    newParentYBlock.set(
+                        "children",
+                        newParentChildren
+                    );
+
+                }
 
             }
 
@@ -1434,450 +1222,687 @@ function Editor() {
                     oldParentYBlock
                 ) {
 
-                    const oldChildren =
-                        (
-                            oldParentYBlock.get(
-                                "children"
-                            ) ||
-                            []
-                        )
-                            .filter(
-                                (childId) =>
-                                    String(childId) !==
-                                    String(sourceBlockId)
-                            );
-
-
                     oldParentYBlock.set(
                         "children",
-                        oldChildren
+                        oldParentChildren
                     );
 
                 }
 
             }
 
-        }
+        };
 
-
-        setDraggedBlockId(
-            null
-        );
-
-
-        console.log(
-            "AST NESTING UPDATED:",
-            sourceBlockId,
-            "→",
-            targetBlockId
-        );
-
-    };
 
     // =========================================
-    // ADD BLOCK AS CHILD
+    // MOVE BLOCK TO ROOT
     // =========================================
 
-    const handleAddChild =
+    const handleMoveToRoot =
         async (
-            parentId,
-            childId
+            sourceBlockId
         ) => {
 
-            try {
+            if (
+                !document
+            ) {
 
-                if (
-                    String(parentId) ===
-                    String(childId)
-                ) {
+                return;
 
-                    return;
-
-                }
+            }
 
 
-                const parentBlock =
-                    document.blocks.find(
-                        (
-                            block
-                        ) =>
-                            String(
-                                block._id
-                            ) ===
-                            String(
-                                parentId
-                            )
-                    );
+            const sourceBlock =
+                document.blocks.find(
+                    (block) =>
+                        String(
+                            block._id
+                        ) ===
+                        String(
+                            sourceBlockId
+                        )
+                );
 
 
-                const childBlock =
-                    document.blocks.find(
-                        (
-                            block
-                        ) =>
-                            String(
-                                block._id
-                            ) ===
-                            String(
-                                childId
-                            )
-                    );
+            if (
+                !sourceBlock
+            ) {
+
+                return;
+
+            }
 
 
-                if (
-                    !parentBlock ||
-                    !childBlock
-                ) {
-
-                    return;
-
-                }
+            const oldParentId =
+                sourceBlock.parentId ||
+                null;
 
 
-                // =================================
-                // PREVENT CIRCULAR HIERARCHY
-                // =================================
+            // Already root
+            if (
+                !oldParentId
+            ) {
 
-                const isDescendant =
-                    (
-                        candidateId,
-                        targetId
-                    ) => {
+                setDraggedBlockId(
+                    null
+                );
 
-                        const candidate =
-                            document.blocks.find(
-                                (
-                                    block
-                                ) =>
-                                    String(
-                                        block._id
-                                    ) ===
-                                    String(
-                                        candidateId
-                                    )
-                            );
+                return;
+
+            }
 
 
-                        if (
-                            !candidate
-                        ) {
-
-                            return false;
-
-                        }
-
-
-                        const children =
-                            candidate.children ||
-                            [];
+            const oldParent =
+                document.blocks.find(
+                    (block) =>
+                        String(
+                            block._id
+                        ) ===
+                        String(
+                            oldParentId
+                        )
+                );
 
 
-                        for (
-                            const child
-                            of children
-                        ) {
-
-                            const id =
-                                typeof child ===
-                                    "object"
-                                    ? child._id
-                                    : child;
-
-
-                            if (
-                                String(id) ===
-                                String(targetId)
-                            ) {
-
-                                return true;
-
-                            }
-
-
-                            if (
-                                isDescendant(
-                                    id,
-                                    targetId
-                                )
-                            ) {
-
-                                return true;
-
-                            }
-
-                        }
-
-
-                        return false;
-
-                    };
-
-
-                if (
-                    isDescendant(
-                        childId,
-                        parentId
+            const oldParentChildren =
+                oldParent
+                    ? (
+                        oldParent.children ||
+                        []
                     )
-                ) {
-
-                    console.warn(
-                        "CANNOT CREATE CIRCULAR AST"
-                    );
-
-                    return;
-
-                }
-
-
-                // =================================
-                // EXISTING CHILDREN
-                // =================================
-
-                const currentChildren =
-                    parentBlock.children ||
-                    [];
-
-
-                const childAlreadyExists =
-                    currentChildren.some(
-                        (
-                            child
-                        ) => {
-
-                            const id =
-                                typeof child ===
-                                    "object"
-                                    ? child._id
-                                    : child;
-
-
-                            return (
-                                String(id) ===
-                                String(childId)
-                            );
-
-                        }
-                    );
-
-
-                if (
-                    childAlreadyExists
-                ) {
-
-                    return;
-
-                }
-
-
-                const updatedChildren =
-                    [
-                        ...currentChildren.map(
-                            (
-                                child
-                            ) =>
+                        .map(
+                            (child) =>
                                 typeof child ===
                                     "object"
                                     ? child._id
                                     : child
-                        ),
-
-                        childId
-                    ];
-
-
-                // =================================
-                // UPDATE PARENT
-                // =================================
-
-                await updateBlockChildren(
-                    parentId,
-                    updatedChildren
-                );
+                        )
+                        .filter(
+                            (childId) =>
+                                String(
+                                    childId
+                                ) !==
+                                String(
+                                    sourceBlockId
+                                )
+                        )
+                    : [];
 
 
-                // =================================
-                // UPDATE CHILD
-                // =================================
+            // =================================
+            // UPDATE OLD PARENT
+            // =================================
 
-                const childResponse =
-                    await fetch(
-                        `http://localhost:5000/api/blocks/${childId}`,
-                        {
-                            method: "PUT",
-
-                            headers: {
-                                "Content-Type":
-                                    "application/json"
-                            },
-
-                            body: JSON.stringify({
-                                parentId
-                            })
-                        }
-                    );
-
-
-                if (
-                    !childResponse.ok
-                ) {
-
-                    throw new Error(
-                        "Failed to update child parent"
-                    );
-
-                }
-
-
-                // =================================
-                // UPDATE YJS
-                // =================================
-
-                const connection =
-                    yjsRef.current;
-
-
-                if (
-                    connection
-                ) {
-
-                    const parentYBlock =
-                        connection.blocks.get(
-                            parentId
-                        );
-
-
-                    if (
-                        parentYBlock
-                    ) {
-
-                        parentYBlock.set(
-                            "children",
-                            updatedChildren
-                        );
-
-                    }
-
-
-                    const childYBlock =
-                        connection.blocks.get(
-                            childId
-                        );
-
-
-                    if (
-                        childYBlock
-                    ) {
-
-                        childYBlock.set(
-                            "parentId",
-                            parentId
-                        );
-
-                    }
-
-                }
-
-
-                // =================================
-                // UPDATE REACT STATE
-                // =================================
-
-                setDocument(
-                    (
-                        previousDocument
-                    ) => {
-
-                        if (
-                            !previousDocument
-                        ) {
-
-                            return previousDocument;
-
-                        }
-
-
-                        return {
-
-                            ...previousDocument,
-
-                            blocks:
-                                previousDocument
-                                    .blocks
-                                    .map(
-                                        (
-                                            block
-                                        ) => {
-
-                                            if (
-                                                String(
-                                                    block._id
-                                                ) ===
-                                                String(
-                                                    parentId
-                                                )
-                                            ) {
-
-                                                return {
-
-                                                    ...block,
-
-                                                    children:
-                                                        updatedChildren
-
-                                                };
-
-                                            }
-
-
-                                            if (
-                                                String(
-                                                    block._id
-                                                ) ===
-                                                String(
-                                                    childId
-                                                )
-                                            ) {
-
-                                                return {
-
-                                                    ...block,
-
-                                                    parentId
-
-                                                };
-
-                                            }
-
-
-                                            return block;
-
-                                        }
-                                    )
-
-                        };
-
-                    }
-                );
-
-
-                console.log(
-                    "AST RELATIONSHIP CREATED:",
-                    parentId,
-                    "→",
-                    childId
-                );
-
-
-            } catch (
-            error
+            if (
+                oldParent
             ) {
 
-                console.error(
-                    "FAILED TO ADD CHILD BLOCK:",
-                    error
+                await updateBlockChildren(
+                    oldParentId,
+                    oldParentChildren
                 );
 
             }
+
+
+            // =================================
+            // UPDATE CHILD PARENT
+            // =================================
+
+            const response =
+                await fetch(
+                    `http://localhost:5000/api/blocks/${sourceBlockId}`,
+                    {
+                        method:
+                            "PUT",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body:
+                            JSON.stringify({
+                                parentId:
+                                    null
+                            })
+
+                    }
+                );
+
+
+            if (
+                !response.ok
+            ) {
+
+                throw new Error(
+                    "Failed to move block to root"
+                );
+
+            }
+
+
+            // =================================
+            // UPDATE DOCUMENT ROOT ORDER
+            // =================================
+
+            const currentRootIds =
+                document.blocks
+                    .filter(
+                        (block) =>
+                            !block.parentId &&
+                            String(
+                                block._id
+                            ) !==
+                            String(
+                                sourceBlockId
+                            )
+                    )
+                    .map(
+                        (block) =>
+                            block._id
+                    );
+
+
+            currentRootIds.push(
+                sourceBlockId
+            );
+
+
+            await reorderBlocks(
+                DOCUMENT_ID,
+                currentRootIds
+            );
+
+
+            // =================================
+            // UPDATE REACT
+            // =================================
+
+            setDocument(
+                (
+                    previousDocument
+                ) => {
+
+                    if (
+                        !previousDocument
+                    ) {
+
+                        return previousDocument;
+
+                    }
+
+
+                    return {
+
+                        ...previousDocument,
+
+                        blocks:
+                            previousDocument
+                                .blocks
+                                .map(
+                                    (
+                                        block
+                                    ) => {
+
+                                        if (
+                                            String(
+                                                block._id
+                                            ) ===
+                                            String(
+                                                sourceBlockId
+                                            )
+                                        ) {
+
+                                            return {
+
+                                                ...block,
+
+                                                parentId:
+                                                    null
+
+                                            };
+
+                                        }
+
+
+                                        if (
+                                            String(
+                                                block._id
+                                            ) ===
+                                            String(
+                                                oldParentId
+                                            )
+                                        ) {
+
+                                            return {
+
+                                                ...block,
+
+                                                children:
+                                                    oldParentChildren
+
+                                            };
+
+                                        }
+
+
+                                        return block;
+
+                                    }
+                                )
+
+                    };
+
+                }
+            );
+
+
+            // =================================
+            // UPDATE YJS
+            // =================================
+
+            updateYjsRelationship(
+                sourceBlockId,
+                null,
+                [],
+                oldParentId,
+                oldParentChildren
+            );
+
+
+            setDraggedBlockId(
+                null
+            );
+
+
+            console.log(
+                "BLOCK MOVED TO ROOT:",
+                sourceBlockId
+            );
+
+        };
+
+
+    // =========================================
+    // DROP BLOCK ON ANOTHER BLOCK
+    // =========================================
+
+    const handleDrop =
+        async (
+            event,
+            targetBlockId
+        ) => {
+
+            event.preventDefault();
+
+
+            const sourceBlockId =
+                event.dataTransfer.getData(
+                    "text/plain"
+                );
+
+
+            if (
+                !sourceBlockId
+            ) {
+
+                setDraggedBlockId(
+                    null
+                );
+
+                return;
+
+            }
+
+
+            if (
+                sourceBlockId ===
+                targetBlockId
+            ) {
+
+                setDraggedBlockId(
+                    null
+                );
+
+                return;
+
+            }
+
+
+            if (
+                isDescendant(
+                    sourceBlockId,
+                    targetBlockId
+                )
+            ) {
+
+                console.warn(
+                    "CANNOT CREATE CIRCULAR AST"
+                );
+
+
+                setDraggedBlockId(
+                    null
+                );
+
+                return;
+
+            }
+
+
+            const sourceBlock =
+                document.blocks.find(
+                    (block) =>
+                        String(
+                            block._id
+                        ) ===
+                        String(
+                            sourceBlockId
+                        )
+                );
+
+
+            const targetBlock =
+                document.blocks.find(
+                    (block) =>
+                        String(
+                            block._id
+                        ) ===
+                        String(
+                            targetBlockId
+                        )
+                );
+
+
+            if (
+                !sourceBlock ||
+                !targetBlock
+            ) {
+
+                setDraggedBlockId(
+                    null
+                );
+
+                return;
+
+            }
+
+
+            const oldParentId =
+                sourceBlock.parentId ||
+                null;
+
+
+            // =================================
+            // REMOVE FROM OLD PARENT
+            // =================================
+
+            let oldParentChildren =
+                [];
+
+
+            if (
+                oldParentId
+            ) {
+
+                const oldParent =
+                    document.blocks.find(
+                        (block) =>
+                            String(
+                                block._id
+                            ) ===
+                            String(
+                                oldParentId
+                            )
+                    );
+
+
+                if (
+                    oldParent
+                ) {
+
+                    oldParentChildren =
+                        (
+                            oldParent.children ||
+                            []
+                        )
+                            .map(
+                                (child) =>
+                                    typeof child ===
+                                        "object"
+                                        ? child._id
+                                        : child
+                            )
+                            .filter(
+                                (childId) =>
+                                    String(
+                                        childId
+                                    ) !==
+                                    String(
+                                        sourceBlockId
+                                    )
+                            );
+
+
+                    await updateBlockChildren(
+                        oldParentId,
+                        oldParentChildren
+                    );
+
+                }
+
+            }
+
+
+            // =================================
+            // TARGET CHILDREN
+            // =================================
+
+            const targetChildren =
+                (
+                    targetBlock.children ||
+                    []
+                )
+                    .map(
+                        (child) =>
+                            typeof child ===
+                                "object"
+                                ? child._id
+                                : child
+                    )
+                    .filter(
+                        (childId) =>
+                            String(
+                                childId
+                            ) !==
+                            String(
+                                sourceBlockId
+                            )
+                    );
+
+
+            targetChildren.push(
+                sourceBlockId
+            );
+
+
+            // =================================
+            // UPDATE TARGET CHILDREN
+            // =================================
+
+            await updateBlockChildren(
+                targetBlockId,
+                targetChildren
+            );
+
+
+            // =================================
+            // UPDATE SOURCE PARENT
+            // =================================
+
+            const response =
+                await fetch(
+                    `http://localhost:5000/api/blocks/${sourceBlockId}`,
+                    {
+                        method:
+                            "PUT",
+
+                        headers: {
+                            "Content-Type":
+                                "application/json"
+                        },
+
+                        body:
+                            JSON.stringify({
+                                parentId:
+                                    targetBlockId
+                            })
+
+                    }
+                );
+
+
+            if (
+                !response.ok
+            ) {
+
+                throw new Error(
+                    "Failed to update block parent"
+                );
+
+            }
+
+
+            // =================================
+            // UPDATE REACT
+            // =================================
+
+            setDocument(
+                (
+                    previousDocument
+                ) => {
+
+                    if (
+                        !previousDocument
+                    ) {
+
+                        return previousDocument;
+
+                    }
+
+
+                    return {
+
+                        ...previousDocument,
+
+                        blocks:
+                            previousDocument
+                                .blocks
+                                .map(
+                                    (
+                                        block
+                                    ) => {
+
+                                        if (
+                                            String(
+                                                block._id
+                                            ) ===
+                                            String(
+                                                sourceBlockId
+                                            )
+                                        ) {
+
+                                            return {
+
+                                                ...block,
+
+                                                parentId:
+                                                    targetBlockId
+
+                                            };
+
+                                        }
+
+
+                                        if (
+                                            String(
+                                                block._id
+                                            ) ===
+                                            String(
+                                                targetBlockId
+                                            )
+                                        ) {
+
+                                            return {
+
+                                                ...block,
+
+                                                children:
+                                                    targetChildren
+
+                                            };
+
+                                        }
+
+
+                                        if (
+                                            oldParentId &&
+                                            String(
+                                                block._id
+                                            ) ===
+                                            String(
+                                                oldParentId
+                                            )
+                                        ) {
+
+                                            return {
+
+                                                ...block,
+
+                                                children:
+                                                    oldParentChildren
+
+                                            };
+
+                                        }
+
+
+                                        return block;
+
+                                    }
+                                )
+
+                    };
+
+                }
+            );
+
+
+            // =================================
+            // UPDATE YJS
+            // =================================
+
+            updateYjsRelationship(
+                sourceBlockId,
+                targetBlockId,
+                targetChildren,
+                oldParentId,
+                oldParentChildren
+            );
+
+
+            setDraggedBlockId(
+                null
+            );
+
+
+            console.log(
+                "BLOCK NESTED:",
+                sourceBlockId,
+                "→",
+                targetBlockId
+            );
 
         };
 
@@ -1966,10 +1991,6 @@ function Editor() {
             content
         ) => {
 
-            // =================================
-            // UPDATE REACT STATE
-            // =================================
-
             setDocument(
                 (
                     previousDocument
@@ -2026,10 +2047,6 @@ function Editor() {
                 }
             );
 
-
-            // =================================
-            // DEBOUNCE SAVE
-            // =================================
 
             if (
                 saveTimers.current[
@@ -2097,19 +2114,9 @@ function Editor() {
                             }
 
 
-                            const mergedContent =
-                                yText.toString();
-
-
                             await updateBlock(
                                 blockId,
-                                mergedContent
-                            );
-
-
-                            console.log(
-                                "MERGED BLOCK SAVED:",
-                                blockId
+                                yText.toString()
                             );
 
 
@@ -2125,10 +2132,122 @@ function Editor() {
                         }
 
                     },
-
                     500
-
                 );
+
+        };
+    // =========================================
+    // SAVE VERSION
+    // =========================================
+
+    const handleCreateVersion = async () => {
+
+        try {
+
+            await createVersion(
+                DOCUMENT_ID
+            );
+
+            const data =
+                await getVersions(
+                    DOCUMENT_ID
+                );
+
+            setVersions(
+                data.versions
+            );
+
+            console.log(
+                "VERSION CREATED"
+            );
+
+        } catch (error) {
+
+            console.error(
+                "FAILED TO CREATE VERSION:",
+                error
+            );
+
+        }
+
+    };
+
+
+    // =========================================
+    // LOAD VERSION HISTORY
+    // =========================================
+
+    const handleShowVersions =
+        async () => {
+
+            try {
+
+                const data =
+                    await getVersions(
+                        DOCUMENT_ID
+                    );
+
+                setVersions(
+                    data.versions
+                );
+
+                setShowVersions(
+                    true
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "FAILED TO LOAD VERSIONS:",
+                    error
+                );
+
+            }
+
+        };
+
+
+    // =========================================
+    // RESTORE VERSION
+    // =========================================
+
+    const handleRestoreVersion =
+        async (
+            versionId
+        ) => {
+
+            try {
+
+                await restoreVersion(
+                    DOCUMENT_ID,
+                    versionId
+                );
+
+
+                // Reload document
+                const data =
+                    await getDocument(
+                        DOCUMENT_ID
+                    );
+
+
+                setDocument(
+                    data.document
+                );
+
+
+                console.log(
+                    "VERSION RESTORED"
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "FAILED TO RESTORE VERSION:",
+                    error
+                );
+
+            }
 
         };
 
@@ -2155,19 +2274,12 @@ function Editor() {
 
 
             if (
-                !connection.undoManager.canUndo()
+                connection.undoManager.canUndo()
             ) {
 
-                console.log(
-                    "NOTHING TO UNDO"
-                );
-
-                return;
+                connection.undoManager.undo();
 
             }
-
-
-            connection.undoManager.undo();
 
         };
 
@@ -2194,19 +2306,12 @@ function Editor() {
 
 
             if (
-                !connection.undoManager.canRedo()
+                connection.undoManager.canRedo()
             ) {
 
-                console.log(
-                    "NOTHING TO REDO"
-                );
-
-                return;
+                connection.undoManager.redo();
 
             }
-
-
-            connection.undoManager.redo();
 
         };
 
@@ -2321,92 +2426,13 @@ function Editor() {
 
 
                     {/* ================================= */}
-                    {/* AST CHILD BUTTON */}
+                    {/* CHILDREN */}
                     {/* ================================= */}
 
-                    {document.blocks.some(
+                    {
+                        block.children &&
+                        block.children.length > 0 &&
                         (
-                            candidate
-                        ) =>
-                            String(
-                                candidate._id
-                            ) !==
-                            String(
-                                block._id
-                            )
-                    ) && (
-
-                            <button
-
-                                onClick={() => {
-
-                                    const child =
-                                        document.blocks.find(
-                                            (
-                                                candidate
-                                            ) =>
-                                                String(
-                                                    candidate._id
-                                                ) !==
-                                                String(
-                                                    block._id
-                                                )
-                                        );
-
-
-                                    if (
-                                        child
-                                    ) {
-
-                                        handleAddChild(
-                                            block._id,
-                                            child._id
-                                        );
-
-                                    }
-
-                                }}
-
-                                style={{
-                                    marginTop:
-                                        "5px",
-
-                                    marginBottom:
-                                        "10px",
-
-                                    padding:
-                                        "5px 10px",
-
-                                    background:
-                                        "#2563eb",
-
-                                    color:
-                                        "white",
-
-                                    border:
-                                        "none",
-
-                                    borderRadius:
-                                        "5px",
-
-                                    cursor:
-                                        "pointer"
-                                }}
-                            >
-
-                                + Make another block a child
-
-                            </button>
-
-                        )}
-
-
-                    {/* ================================= */}
-                    {/* CHILD BLOCKS */}
-                    {/* ================================= */}
-
-                    {block.children &&
-                        block.children.length > 0 && (
 
                             <div
                                 style={{
@@ -2415,52 +2441,55 @@ function Editor() {
                                 }}
                             >
 
-                                {block.children.map(
-                                    (
-                                        child
-                                    ) => {
+                                {
+                                    block.children.map(
+                                        (
+                                            child
+                                        ) => {
 
-                                        const childId =
-                                            typeof child ===
-                                                "object"
-                                                ? child._id
-                                                : child;
+                                            const childId =
+                                                typeof child ===
+                                                    "object"
+                                                    ? child._id
+                                                    : child;
 
 
-                                        const childBlock =
-                                            document.blocks.find(
-                                                (
-                                                    item
-                                                ) =>
-                                                    String(
-                                                        item._id
-                                                    ) ===
-                                                    String(
-                                                        childId
-                                                    )
+                                            const childBlock =
+                                                document.blocks.find(
+                                                    (
+                                                        item
+                                                    ) =>
+                                                        String(
+                                                            item._id
+                                                        ) ===
+                                                        String(
+                                                            childId
+                                                        )
+                                                );
+
+
+                                            if (
+                                                !childBlock
+                                            ) {
+
+                                                return null;
+
+                                            }
+
+
+                                            return renderBlock(
+                                                childBlock,
+                                                depth + 1
                                             );
 
-
-                                        if (
-                                            !childBlock
-                                        ) {
-
-                                            return null;
-
                                         }
-
-
-                                        return renderBlock(
-                                            childBlock,
-                                            depth + 1
-                                        );
-
-                                    }
-                                )}
+                                    )
+                                }
 
                             </div>
 
-                        )}
+                        )
+                    }
 
                 </div>
 
@@ -2478,11 +2507,9 @@ function Editor() {
     ) {
 
         return (
-
             <h2>
                 Loading document...
             </h2>
-
         );
 
     }
@@ -2497,11 +2524,9 @@ function Editor() {
     ) {
 
         return (
-
             <h2>
                 Document not found
             </h2>
-
         );
 
     }
@@ -2526,18 +2551,14 @@ function Editor() {
             }}
         >
 
-            {/* ================================= */}
-            {/* TITLE */}
-            {/* ================================= */}
-
             <h1>
                 {document.title}
             </h1>
 
 
-            {/* ================================= */}
-            {/* BUTTONS */}
-            {/* ================================= */}
+            {/* ========================================= */}
+            {/* TOOLBAR */}
+            {/* ========================================= */}
 
             <div
                 style={{
@@ -2564,9 +2585,7 @@ function Editor() {
                         )
                     }
                 >
-
                     + Paragraph
-
                 </button>
 
 
@@ -2577,9 +2596,7 @@ function Editor() {
                         )
                     }
                 >
-
                     + Heading
-
                 </button>
 
 
@@ -2590,9 +2607,7 @@ function Editor() {
                         )
                     }
                 >
-
                     + Code
-
                 </button>
 
 
@@ -2603,9 +2618,7 @@ function Editor() {
                         )
                     }
                 >
-
                     + Bullet
-
                 </button>
 
 
@@ -2614,9 +2627,7 @@ function Editor() {
                         handleUndo
                     }
                 >
-
                     ↶ Undo
-
                 </button>
 
 
@@ -2625,45 +2636,222 @@ function Editor() {
                         handleRedo
                     }
                 >
-
                     ↷ Redo
+                </button>
+                <button
+                    onClick={
+                        handleCreateVersion
+                    }
+                >
+                    💾 Save Version
+                </button>
 
+                <button
+                    onClick={
+                        handleShowVersions
+                    }
+                >
+                    🕒 Version History
                 </button>
 
             </div>
+            {showVersions && (
+
+    <div
+        style={{
+            marginBottom: "20px",
+            padding: "15px",
+            background: "#111827",
+            color: "white",
+            borderRadius: "8px"
+        }}
+    >
+
+        <div
+            style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "10px"
+            }}
+        >
+
+            <strong>
+                Version History
+            </strong>
+
+            <button
+                onClick={() =>
+                    setShowVersions(false)
+                }
+            >
+                Close
+            </button>
+
+        </div>
 
 
-            {/* ================================= */}
+        {versions.length === 0 ? (
+
+            <p>
+                No saved versions yet.
+            </p>
+
+        ) : (
+
+            versions.map(
+                (version) => (
+
+                    <div
+                        key={
+                            version._id
+                        }
+                        style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "8px",
+                            marginBottom: "6px",
+                            background: "#1f2937",
+                            borderRadius: "6px"
+                        }}
+                    >
+
+                        <span>
+                            Version{" "}
+                            {version.versionNumber}
+                            {" — "}
+                            {
+                                new Date(
+                                    version.createdAt
+                                ).toLocaleString()
+                            }
+                        </span>
+
+
+                        <button
+                            onClick={() =>
+                                handleRestoreVersion(
+                                    version._id
+                                )
+                            }
+                        >
+                            Restore
+                        </button>
+
+                    </div>
+
+                )
+            )
+
+        )}
+
+    </div>
+
+)}
+
+
+            {/* ========================================= */}
             {/* CURRENT USER */}
-            {/* ================================= */}
+            {/* ========================================= */}
 
             <div
                 style={{
-                    marginBottom: "20px",
-                    padding: "8px 12px",
-                    borderRadius: "8px",
-                    width: "fit-content",
+
+                    marginBottom:
+                        "10px",
+
+                    padding:
+                        "10px",
+
                     background:
-                        connectionStatus === "connected"
-                            ? "#14532d"
-                            : connectionStatus === "connecting"
-                                ? "#854d0e"
-                                : "#7f1d1d",
-                    color: "white",
-                    fontWeight: "bold"
+                        "#1f2937",
+
+                    color:
+                        "white",
+
+                    borderRadius:
+                        "8px",
+
+                    width:
+                        "fit-content"
+
                 }}
             >
-                {connectionStatus === "connected" && "🟢 Connected"}
 
-                {connectionStatus === "connecting" && "🟡 Connecting..."}
+                Editing as:{" "}
 
-                {connectionStatus === "disconnected" && "🔴 Disconnected"}
+                <strong>
+                    {currentUser}
+                </strong>
+
             </div>
 
 
-            {/* ================================= */}
+            {/* ========================================= */}
+            {/* CONNECTION STATUS */}
+            {/* ========================================= */}
+
+            <div
+                style={{
+
+                    marginBottom:
+                        "15px",
+
+                    padding:
+                        "8px 12px",
+
+                    borderRadius:
+                        "8px",
+
+                    width:
+                        "fit-content",
+
+                    background:
+                        connectionStatus ===
+                            "connected"
+
+                            ? "#14532d"
+
+                            : connectionStatus ===
+                                "connecting"
+
+                                ? "#854d0e"
+
+                                : "#7f1d1d",
+
+                    color:
+                        "white",
+
+                    fontWeight:
+                        "bold"
+
+                }}
+            >
+
+                {
+                    connectionStatus ===
+                    "connected" &&
+                    "🟢 Connected"
+                }
+
+                {
+                    connectionStatus ===
+                    "connecting" &&
+                    "🟡 Connecting..."
+                }
+
+                {
+                    connectionStatus ===
+                    "disconnected" &&
+                    "🔴 Disconnected"
+                }
+
+            </div>
+
+
+            {/* ========================================= */}
             {/* ONLINE USERS */}
-            {/* ================================= */}
+            {/* ========================================= */}
 
             <div
                 style={{
@@ -2691,67 +2879,132 @@ function Editor() {
                 </strong>
 
 
-                {onlineUsers.map(
-                    (
-                        user,
-                        index
-                    ) => (
+                {
+                    onlineUsers.map(
+                        (
+                            user,
+                            index
+                        ) => (
 
-                        <span
+                            <span
 
-                            key={
-                                user.name +
-                                index
-                            }
+                                key={
+                                    user.name +
+                                    index
+                                }
 
-                            style={{
-                                padding:
-                                    "5px 10px",
+                                style={{
+                                    padding:
+                                        "5px 10px",
 
-                                borderRadius:
-                                    "20px",
+                                    borderRadius:
+                                        "20px",
 
-                                background:
-                                    "#1f7a4d",
+                                    background:
+                                        "#1f7a4d",
 
-                                color:
-                                    "white"
-                            }}
-                        >
+                                    color:
+                                        "white"
+                                }}
+                            >
 
-                            🟢{" "}
-                            {user.name}
+                                🟢{" "}
 
-                        </span>
+                                {
+                                    user.name
+                                }
 
+                            </span>
+
+                        )
                     )
-                )}
+                }
 
             </div>
 
 
-            {/* ================================= */}
+            {/* ========================================= */}
+            {/* ROOT DROP ZONE */}
+            {/* ========================================= */}
+
+            <div
+                onDragOver={
+                    handleDragOver
+                }
+
+                onDrop={
+                    (event) => {
+
+                        event.preventDefault();
+
+                        const blockId =
+                            event.dataTransfer.getData(
+                                "text/plain"
+                            );
+
+                        if (
+                            blockId
+                        ) {
+
+                            handleMoveToRoot(
+                                blockId
+                            );
+
+                        }
+
+                    }
+                }
+
+                style={{
+                    marginBottom:
+                        "20px",
+
+                    padding:
+                        "12px",
+
+                    border:
+                        "2px dashed #374151",
+
+                    borderRadius:
+                        "8px",
+
+                    color:
+                        "#9ca3af",
+
+                    textAlign:
+                        "center"
+                }}
+            >
+
+                Drop here to move block to root
+
+            </div>
+
+
+            {/* ========================================= */}
             {/* AST DOCUMENT */}
-            {/* ================================= */}
+            {/* ========================================= */}
 
             <div>
 
-                {document.blocks
-                    .filter(
-                        (
-                            block
-                        ) =>
-                            !block.parentId
-                    )
-                    .map(
-                        (
-                            block
-                        ) =>
-                            renderBlock(
-                                block,
-                                0
-                            )
-                    )}
+                {
+                    document.blocks
+                        .filter(
+                            (
+                                block
+                            ) =>
+                                !block.parentId
+                        )
+                        .map(
+                            (
+                                block
+                            ) =>
+                                renderBlock(
+                                    block,
+                                    0
+                                )
+                        )
+                }
 
             </div>
 
