@@ -13,14 +13,16 @@ export const getDocument = async (
     documentId
 ) => {
 
-    const response = await fetch(
-        `${API_URL}/${documentId}`
-    );
+    const response =
+        await fetch(
+            `${API_URL}/${documentId}`
+        );
 
     const data =
         await response.json().catch(
             () => null
         );
+
 
     if (!response.ok) {
 
@@ -47,14 +49,16 @@ export const getDocument = async (
 
 export const getDocuments = async () => {
 
-    const response = await fetch(
-        API_URL
-    );
+    const response =
+        await fetch(
+            API_URL
+        );
 
     const data =
         await response.json().catch(
             () => null
         );
+
 
     if (!response.ok) {
 
@@ -83,26 +87,30 @@ export const createDocument = async (
     documentData
 ) => {
 
-    const response = await fetch(
-        API_URL,
-        {
-            method: "POST",
+    const response =
+        await fetch(
+            API_URL,
+            {
+                method:
+                    "POST",
 
-            headers: {
-                "Content-Type":
-                    "application/json"
-            },
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
 
-            body: JSON.stringify(
-                documentData
-            )
-        }
-    );
+                body:
+                    JSON.stringify(
+                        documentData
+                    )
+            }
+        );
 
     const data =
         await response.json().catch(
             () => null
         );
+
 
     if (!response.ok) {
 
@@ -131,26 +139,30 @@ export const createBlock = async (
     blockData
 ) => {
 
-    const response = await fetch(
-        BLOCK_API_URL,
-        {
-            method: "POST",
+    const response =
+        await fetch(
+            BLOCK_API_URL,
+            {
+                method:
+                    "POST",
 
-            headers: {
-                "Content-Type":
-                    "application/json"
-            },
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
 
-            body: JSON.stringify(
-                blockData
-            )
-        }
-    );
+                body:
+                    JSON.stringify(
+                        blockData
+                    )
+            }
+        );
 
     const data =
         await response.json().catch(
             () => null
         );
+
 
     if (!response.ok) {
 
@@ -180,26 +192,30 @@ export const updateBlock = async (
     content
 ) => {
 
-    const response = await fetch(
-        `${BLOCK_API_URL}/${blockId}`,
-        {
-            method: "PUT",
+    const response =
+        await fetch(
+            `${BLOCK_API_URL}/${blockId}`,
+            {
+                method:
+                    "PUT",
 
-            headers: {
-                "Content-Type":
-                    "application/json"
-            },
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
 
-            body: JSON.stringify({
-                content
-            })
-        }
-    );
+                body:
+                    JSON.stringify({
+                        content
+                    })
+            }
+        );
 
     const data =
         await response.json().catch(
             () => null
         );
+
 
     if (!response.ok) {
 
@@ -233,12 +249,16 @@ export const deleteBlock = async (
         blockId
     );
 
-    const response = await fetch(
-        `${BLOCK_API_URL}/${blockId}`,
-        {
-            method: "DELETE"
-        }
-    );
+
+    const response =
+        await fetch(
+            `${BLOCK_API_URL}/${blockId}`,
+            {
+                method:
+                    "DELETE"
+            }
+        );
+
 
     const data =
         await response.json().catch(
@@ -251,12 +271,16 @@ export const deleteBlock = async (
         console.error(
             "DELETE BLOCK FAILED:",
             {
-                status: response.status,
+                status:
+                    response.status,
+
                 statusText:
                     response.statusText,
+
                 data
             }
         );
+
 
         throw new Error(
             data?.message ||
@@ -275,6 +299,7 @@ export const deleteBlock = async (
     return data;
 };
 
+
 // =========================================
 // REORDER BLOCKS
 // =========================================
@@ -284,37 +309,50 @@ export const reorderBlocks = async (
     blockIds
 ) => {
 
-    const response = await fetch(
-        `http://localhost:5000/api/documents/${documentId}/reorder`,
-        {
-            method: "PUT",
+    const response =
+        await fetch(
+            `${API_URL}/${documentId}/reorder`,
+            {
+                method:
+                    "PUT",
 
-            headers: {
-                "Content-Type": "application/json"
-            },
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                },
 
-            body: JSON.stringify({
-                blockIds
-            })
-        }
-    );
+                body:
+                    JSON.stringify({
+                        blockIds
+                    })
+            }
+        );
+
+
+    const data =
+        await response.json().catch(
+            () => null
+        );
+
 
     if (!response.ok) {
 
-        const errorData =
-            await response.json().catch(() => ({}));
-
         console.error(
             "REORDER BLOCKS FAILED:",
-            errorData
+            response.status,
+            data
         );
+
 
         throw new Error(
+            data?.message ||
             `Failed to reorder blocks (${response.status})`
         );
+
     }
 
-    return response.json();
+
+    return data;
 };
 
 
@@ -326,17 +364,21 @@ export const deleteDocument = async (
     documentId
 ) => {
 
-    const response = await fetch(
-        `${API_URL}/${documentId}`,
-        {
-            method: "DELETE"
-        }
-    );
+    const response =
+        await fetch(
+            `${API_URL}/${documentId}`,
+            {
+                method:
+                    "DELETE"
+            }
+        );
+
 
     const data =
         await response.json().catch(
             () => null
         );
+
 
     if (!response.ok) {
 
@@ -346,6 +388,7 @@ export const deleteDocument = async (
             data
         );
 
+
         throw new Error(
             data?.message ||
             `Failed to delete document (${response.status})`
@@ -353,8 +396,15 @@ export const deleteDocument = async (
 
     }
 
+
     return data;
 };
+
+
+// =========================================
+// UPDATE BLOCK CHILDREN
+// =========================================
+
 export const updateBlockChildren = async (
     blockId,
     children
@@ -362,33 +412,221 @@ export const updateBlockChildren = async (
 
     const response =
         await fetch(
-            `http://localhost:5000/api/blocks/${blockId}/children`,
+            `${BLOCK_API_URL}/${blockId}/children`,
             {
-                method: "PUT",
+                method:
+                    "PUT",
 
                 headers: {
                     "Content-Type":
                         "application/json"
                 },
 
-                body: JSON.stringify({
-                    children
-                })
+                body:
+                    JSON.stringify({
+                        children
+                    })
             }
         );
 
+
     const data =
-        await response.json();
+        await response.json().catch(
+            () => null
+        );
+
 
     if (!response.ok) {
 
+        console.error(
+            "UPDATE BLOCK CHILDREN FAILED:",
+            response.status,
+            data
+        );
+
+
         throw new Error(
-            data.message ||
-            "Failed to update block children"
+            data?.message ||
+            `Failed to update block children (${response.status})`
         );
 
     }
 
-    return data;
 
+    return data;
+};
+
+
+// =========================================
+// CREATE VERSION
+// =========================================
+
+export const createVersion = async (
+    documentId
+) => {
+
+    console.log(
+        "CREATING VERSION:",
+        documentId
+    );
+
+
+    const response =
+        await fetch(
+            `${API_URL}/${documentId}/versions`,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                }
+            }
+        );
+
+
+    const data =
+        await response.json().catch(
+            () => null
+        );
+
+
+    if (!response.ok) {
+
+        console.error(
+            "CREATE VERSION FAILED:",
+            response.status,
+            data
+        );
+
+
+        throw new Error(
+            data?.message ||
+            `Failed to create version (${response.status})`
+        );
+
+    }
+
+
+    console.log(
+        "VERSION CREATED:",
+        data
+    );
+
+
+    return data;
+};
+
+
+// =========================================
+// GET VERSION HISTORY
+// =========================================
+
+export const getVersions = async (
+    documentId
+) => {
+
+    console.log(
+        "GETTING VERSIONS:",
+        documentId
+    );
+
+
+    const response =
+        await fetch(
+            `${API_URL}/${documentId}/versions`
+        );
+
+
+    const data =
+        await response.json().catch(
+            () => null
+        );
+
+
+    if (!response.ok) {
+
+        console.error(
+            "GET VERSIONS FAILED:",
+            response.status,
+            data
+        );
+
+
+        throw new Error(
+            data?.message ||
+            `Failed to get versions (${response.status})`
+        );
+
+    }
+
+
+    return data;
+};
+
+
+// =========================================
+// RESTORE VERSION
+// =========================================
+
+export const restoreVersion = async (
+    documentId,
+    versionId
+) => {
+
+    console.log(
+        "RESTORING VERSION:",
+        {
+            documentId,
+            versionId
+        }
+    );
+
+
+    const response =
+        await fetch(
+            `${API_URL}/${documentId}/versions/${versionId}/restore`,
+            {
+                method:
+                    "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/json"
+                }
+            }
+        );
+
+
+    const data =
+        await response.json().catch(
+            () => null
+        );
+
+
+    if (!response.ok) {
+
+        console.error(
+            "RESTORE VERSION FAILED:",
+            response.status,
+            data
+        );
+
+
+        throw new Error(
+            data?.message ||
+            `Failed to restore version (${response.status})`
+        );
+
+    }
+
+
+    console.log(
+        "VERSION RESTORED:",
+        data
+    );
+
+
+    return data;
 };
