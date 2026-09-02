@@ -28,6 +28,8 @@ import {
     getCurrentUser
 } from "../services/userService";
 
+import "./Editor.css";
+
 
 const DOCUMENT_ID =
     "6a7c775e1e1354cef663ebc5";
@@ -52,42 +54,35 @@ function Editor() {
         setDocument
     ] = useState(null);
 
-
     const [
         loading,
         setLoading
     ] = useState(true);
-
 
     const [
         onlineUsers,
         setOnlineUsers
     ] = useState([]);
 
-
     const [
         activeUsers,
         setActiveUsers
     ] = useState({});
-
 
     const [
         draggedBlockId,
         setDraggedBlockId
     ] = useState(null);
 
-
     const [
         connectionStatus,
         setConnectionStatus
     ] = useState("connecting");
 
-
     const [
         versions,
         setVersions
     ] = useState([]);
-
 
     const [
         showVersions,
@@ -102,17 +97,15 @@ function Editor() {
     const saveTimers =
         useRef({});
 
-
     const yjsRef =
         useRef(null);
-
 
     const blockObserversRef =
         useRef(new Map());
 
 
     // =========================================
-    // OBSERVE YJS BLOCK METADATA
+    // OBSERVE YJS BLOCK
     // =========================================
 
     const observeYBlock = (
@@ -130,9 +123,7 @@ function Editor() {
                 blockId
             )
         ) {
-
             return;
-
         }
 
 
@@ -156,7 +147,6 @@ function Editor() {
             ) {
 
                 return;
-
             }
 
 
@@ -172,12 +162,6 @@ function Editor() {
                 ) || [];
 
 
-            console.log(
-                "YJS AST METADATA CHANGED:",
-                blockId
-            );
-
-
             setDocument(
                 (
                     previousDocument
@@ -186,9 +170,7 @@ function Editor() {
                     if (
                         !previousDocument
                     ) {
-
                         return previousDocument;
-
                     }
 
 
@@ -205,6 +187,7 @@ function Editor() {
                                     ) => {
 
                                         if (
+                                            block &&
                                             String(
                                                 block._id
                                             ) ===
@@ -224,7 +207,6 @@ function Editor() {
                                                     newChildren
 
                                             };
-
                                         }
 
 
@@ -234,7 +216,6 @@ function Editor() {
                                 )
 
                     };
-
                 }
             );
 
@@ -263,10 +244,8 @@ function Editor() {
         let connection =
             null;
 
-
         let updateOnlineUsers =
             null;
-
 
         let handleBlocksChange =
             null;
@@ -281,10 +260,6 @@ function Editor() {
                         "LOADING DOCUMENT..."
                     );
 
-
-                    // =================================
-                    // GET DOCUMENT
-                    // =================================
 
                     const data =
                         await getDocument(
@@ -308,7 +283,6 @@ function Editor() {
                         );
 
                         return;
-
                     }
 
 
@@ -344,8 +318,7 @@ function Editor() {
                     const {
                         blocks,
                         awareness
-                    } =
-                        connection;
+                    } = connection;
 
 
                     // =================================
@@ -375,7 +348,6 @@ function Editor() {
                                             ) {
 
                                                 return null;
-
                                             }
 
 
@@ -423,7 +395,6 @@ function Editor() {
                                     ) {
 
                                         return;
-
                                     }
 
 
@@ -470,7 +441,7 @@ function Editor() {
 
 
                     // =================================
-                    // YJS BLOCK ADD / DELETE
+                    // BLOCK CHANGES
                     // =================================
 
                     handleBlocksChange =
@@ -485,7 +456,7 @@ function Editor() {
                                 ) => {
 
                                     // =============================
-                                    // NEW BLOCK
+                                    // ADD BLOCK
                                     // =============================
 
                                     if (
@@ -504,7 +475,6 @@ function Editor() {
                                         ) {
 
                                             return;
-
                                         }
 
 
@@ -583,9 +553,7 @@ function Editor() {
                                                 if (
                                                     !previousDocument
                                                 ) {
-
                                                     return previousDocument;
-
                                                 }
 
 
@@ -596,6 +564,7 @@ function Editor() {
                                                             (
                                                                 block
                                                             ) =>
+                                                                block &&
                                                                 String(
                                                                     block._id
                                                                 ) ===
@@ -608,9 +577,7 @@ function Editor() {
                                                 if (
                                                     exists
                                                 ) {
-
                                                     return previousDocument;
-
                                                 }
 
 
@@ -621,9 +588,7 @@ function Editor() {
                                                     blocks:
                                                         [
                                                             ...previousDocument.blocks,
-
                                                             newBlock
-
                                                         ]
 
                                                 };
@@ -651,9 +616,7 @@ function Editor() {
                                                 if (
                                                     !previousDocument
                                                 ) {
-
                                                     return previousDocument;
-
                                                 }
 
 
@@ -668,6 +631,7 @@ function Editor() {
                                                                 (
                                                                     block
                                                                 ) =>
+                                                                    block &&
                                                                     String(
                                                                         block._id
                                                                     ) !==
@@ -695,7 +659,7 @@ function Editor() {
 
 
                     // =================================
-                    // INITIALIZE YJS BLOCKS
+                    // INITIALIZE YJS
                     // =================================
 
                     if (
@@ -707,10 +671,21 @@ function Editor() {
                         );
 
 
-                        data.document.blocks.forEach(
+                        (
+                            data.document.blocks ||
+                            []
+                        ).forEach(
                             (
                                 block
                             ) => {
+
+                                if (
+                                    !block ||
+                                    !block._id
+                                ) {
+                                    return;
+                                }
+
 
                                 const yBlock =
                                     new Y.Map();
@@ -799,10 +774,6 @@ function Editor() {
 
                     } else {
 
-                        // =================================
-                        // EXISTING YJS BLOCKS
-                        // =================================
-
                         blocks.forEach(
                             (
                                 yBlock,
@@ -872,11 +843,6 @@ function Editor() {
         // =========================================
 
         return () => {
-
-            console.log(
-                "CLEANING UP EDITOR"
-            );
-
 
             if (
                 connection
@@ -1011,7 +977,8 @@ function Editor() {
 
 
                 if (
-                    !connection
+                    !connection ||
+                    !newBlock
                 ) {
 
                     console.error(
@@ -1086,12 +1053,6 @@ function Editor() {
                 );
 
 
-                console.log(
-                    "BLOCK ADDED:",
-                    newBlock._id
-                );
-
-
             } catch (
                 error
             ) {
@@ -1117,16 +1078,104 @@ function Editor() {
 
             try {
 
-                console.log(
-                    "DELETING BLOCK:",
-                    blockId
-                );
+                if (
+                    !document
+                ) {
+                    return;
+                }
 
+
+                const block =
+                    document.blocks.find(
+                        (
+                            item
+                        ) =>
+                            item &&
+                            String(
+                                item._id
+                            ) ===
+                            String(
+                                blockId
+                            )
+                    );
+
+
+                // =================================
+                // REMOVE FROM PARENT
+                // =================================
+
+                if (
+                    block?.parentId
+                ) {
+
+                    const parent =
+                        document.blocks.find(
+                            (
+                                item
+                            ) =>
+                                item &&
+                                String(
+                                    item._id
+                                ) ===
+                                String(
+                                    block.parentId
+                                )
+                        );
+
+
+                    if (
+                        parent
+                    ) {
+
+                        const children =
+                            (
+                                parent.children ||
+                                []
+                            )
+                                .map(
+                                    (
+                                        child
+                                    ) =>
+                                        typeof child ===
+                                        "object"
+                                            ? child._id
+                                            : child
+                                )
+                                .filter(
+                                    (
+                                        childId
+                                    ) =>
+                                        String(
+                                            childId
+                                        ) !==
+                                        String(
+                                            blockId
+                                        )
+                                );
+
+
+                        await updateBlockChildren(
+                            block.parentId,
+                            children
+                        );
+
+                    }
+
+                }
+
+
+                // =================================
+                // DELETE FROM MONGODB
+                // =================================
 
                 await deleteBlock(
                     blockId
                 );
 
+
+                // =================================
+                // DELETE FROM YJS
+                // =================================
 
                 const connection =
                     yjsRef.current;
@@ -1209,11 +1258,27 @@ function Editor() {
     const isDescendant =
         (
             parentId,
-            possibleChildId
+            possibleChildId,
+            visited = new Set()
         ) => {
 
             if (
                 !document
+            ) {
+                return false;
+            }
+
+
+            const parentKey =
+                String(
+                    parentId
+                );
+
+
+            if (
+                visited.has(
+                    parentKey
+                )
             ) {
 
                 return false;
@@ -1221,17 +1286,21 @@ function Editor() {
             }
 
 
+            visited.add(
+                parentKey
+            );
+
+
             const parent =
                 document.blocks.find(
                     (
                         block
                     ) =>
+                        block &&
                         String(
                             block._id
                         ) ===
-                        String(
-                            parentId
-                        )
+                        parentKey
                 );
 
 
@@ -1273,7 +1342,8 @@ function Editor() {
                 if (
                     isDescendant(
                         childId,
-                        possibleChildId
+                        possibleChildId,
+                        visited
                     )
                 ) {
 
@@ -1290,7 +1360,7 @@ function Editor() {
 
 
     // =========================================
-    // UPDATE YJS RELATIONSHIP
+    // UPDATE YJS AST RELATIONSHIP
     // =========================================
 
     const updateYjsRelationship =
@@ -1309,15 +1379,9 @@ function Editor() {
             if (
                 !connection
             ) {
-
                 return;
-
             }
 
-
-            // ---------------------------------
-            // SOURCE
-            // ---------------------------------
 
             const sourceYBlock =
                 connection.blocks.get(
@@ -1336,10 +1400,6 @@ function Editor() {
 
             }
 
-
-            // ---------------------------------
-            // NEW PARENT
-            // ---------------------------------
 
             if (
                 newParentId
@@ -1364,10 +1424,6 @@ function Editor() {
 
             }
 
-
-            // ---------------------------------
-            // OLD PARENT
-            // ---------------------------------
 
             if (
                 oldParentId
@@ -1409,9 +1465,7 @@ function Editor() {
                 if (
                     !document
                 ) {
-
                     return;
-
                 }
 
 
@@ -1420,6 +1474,7 @@ function Editor() {
                         (
                             block
                         ) =>
+                            block &&
                             String(
                                 block._id
                             ) ===
@@ -1432,9 +1487,7 @@ function Editor() {
                 if (
                     !sourceBlock
                 ) {
-
                     return;
-
                 }
 
 
@@ -1461,6 +1514,7 @@ function Editor() {
                         (
                             block
                         ) =>
+                            block &&
                             String(
                                 block._id
                             ) ===
@@ -1516,7 +1570,7 @@ function Editor() {
 
 
                 // =================================
-                // UPDATE CHILD PARENT
+                // UPDATE SOURCE
                 // =================================
 
                 const response =
@@ -1553,7 +1607,7 @@ function Editor() {
 
 
                 // =================================
-                // UPDATE ROOT ORDER
+                // ROOT ORDER
                 // =================================
 
                 const rootIds =
@@ -1564,6 +1618,7 @@ function Editor() {
                             ) => {
 
                                 return (
+                                    block &&
                                     !block.parentId &&
                                     String(
                                         block._id
@@ -1606,9 +1661,7 @@ function Editor() {
                         if (
                             !previousDocument
                         ) {
-
                             return previousDocument;
-
                         }
 
 
@@ -1623,6 +1676,13 @@ function Editor() {
                                         (
                                             block
                                         ) => {
+
+                                            if (
+                                                !block
+                                            ) {
+                                                return block;
+                                            }
+
 
                                             if (
                                                 String(
@@ -1693,12 +1753,6 @@ function Editor() {
 
                 setDraggedBlockId(
                     null
-                );
-
-
-                console.log(
-                    "BLOCK MOVED TO ROOT:",
-                    sourceBlockId
                 );
 
 
@@ -1784,15 +1838,12 @@ function Editor() {
             }
 
 
-            // =================================
-            // FIND BLOCKS
-            // =================================
-
             const sourceBlock =
                 document.blocks.find(
                     (
                         block
                     ) =>
+                        block &&
                         String(
                             block._id
                         ) ===
@@ -1807,6 +1858,7 @@ function Editor() {
                     (
                         block
                     ) =>
+                        block &&
                         String(
                             block._id
                         ) ===
@@ -1877,6 +1929,7 @@ function Editor() {
                         (
                             block
                         ) =>
+                            block &&
                             String(
                                 block._id
                             ) ===
@@ -1928,7 +1981,7 @@ function Editor() {
 
 
             // =================================
-            // ADD TO NEW PARENT
+            // NEW PARENT CHILDREN
             // =================================
 
             const targetChildren =
@@ -2007,7 +2060,7 @@ function Editor() {
 
 
             // =================================
-            // UPDATE ROOT DOCUMENT ORDER
+            // REMOVE SOURCE FROM ROOT ORDER
             // =================================
 
             const newRootIds =
@@ -2015,14 +2068,20 @@ function Editor() {
                     .filter(
                         (
                             block
-                        ) =>
-                            !block.parentId &&
-                            String(
-                                block._id
-                            ) !==
-                            String(
-                                sourceBlockId
-                            )
+                        ) => {
+
+                            return (
+                                block &&
+                                !block.parentId &&
+                                String(
+                                    block._id
+                                ) !==
+                                String(
+                                    sourceBlockId
+                                )
+                            );
+
+                        }
                     )
                     .map(
                         (
@@ -2050,9 +2109,7 @@ function Editor() {
                     if (
                         !previousDocument
                     ) {
-
                         return previousDocument;
-
                     }
 
 
@@ -2068,7 +2125,13 @@ function Editor() {
                                         block
                                     ) => {
 
-                                        // SOURCE
+                                        if (
+                                            !block
+                                        ) {
+                                            return block;
+                                        }
+
+
                                         if (
                                             String(
                                                 block._id
@@ -2090,7 +2153,6 @@ function Editor() {
                                         }
 
 
-                                        // TARGET
                                         if (
                                             String(
                                                 block._id
@@ -2112,7 +2174,6 @@ function Editor() {
                                         }
 
 
-                                        // OLD PARENT
                                         if (
                                             oldParentId &&
                                             String(
@@ -2190,9 +2251,7 @@ function Editor() {
             if (
                 !connection
             ) {
-
                 return;
-
             }
 
 
@@ -2221,9 +2280,7 @@ function Editor() {
             if (
                 !connection
             ) {
-
                 return;
-
             }
 
 
@@ -2266,9 +2323,7 @@ function Editor() {
                     if (
                         !previousDocument
                     ) {
-
                         return previousDocument;
-
                     }
 
 
@@ -2283,6 +2338,13 @@ function Editor() {
                                     (
                                         block
                                     ) => {
+
+                                        if (
+                                            !block
+                                        ) {
+                                            return block;
+                                        }
+
 
                                         if (
                                             String(
@@ -2315,10 +2377,6 @@ function Editor() {
             );
 
 
-            // =================================
-            // CLEAR TIMER
-            // =================================
-
             if (
                 saveTimers.current[
                     blockId
@@ -2333,10 +2391,6 @@ function Editor() {
 
             }
 
-
-            // =================================
-            // SAVE MERGED YJS CONTENT
-            // =================================
 
             saveTimers.current[
                 blockId
@@ -2353,9 +2407,7 @@ function Editor() {
                             if (
                                 !connection
                             ) {
-
                                 return;
-
                             }
 
 
@@ -2368,9 +2420,7 @@ function Editor() {
                             if (
                                 !yBlock
                             ) {
-
                                 return;
-
                             }
 
 
@@ -2383,9 +2433,7 @@ function Editor() {
                             if (
                                 !yText
                             ) {
-
                                 return;
-
                             }
 
 
@@ -2438,6 +2486,11 @@ function Editor() {
                 );
 
 
+                setShowVersions(
+                    true
+                );
+
+
                 console.log(
                     "VERSION CREATED"
                 );
@@ -2458,7 +2511,7 @@ function Editor() {
 
 
     // =========================================
-    // SHOW VERSION HISTORY
+    // SHOW VERSIONS
     // =========================================
 
     const handleShowVersions =
@@ -2507,9 +2560,16 @@ function Editor() {
 
             try {
 
-                await restoreVersion(
-                    DOCUMENT_ID,
-                    versionId
+                const result =
+                    await restoreVersion(
+                        DOCUMENT_ID,
+                        versionId
+                    );
+
+
+                console.log(
+                    "VERSION RESTORED:",
+                    result
                 );
 
 
@@ -2524,8 +2584,130 @@ function Editor() {
                 );
 
 
-                console.log(
-                    "VERSION RESTORED"
+                // =================================
+                // REBUILD YJS STATE
+                // =================================
+
+                const connection =
+                    yjsRef.current;
+
+
+                if (
+                    connection
+                ) {
+
+                    connection.blocks.forEach(
+                        (
+                            yBlock,
+                            blockId
+                        ) => {
+
+                            connection.blocks.delete(
+                                blockId
+                            );
+
+                        }
+                    );
+
+
+                    (
+                        data.document.blocks ||
+                        []
+                    ).forEach(
+                        (
+                            block
+                        ) => {
+
+                            const yBlock =
+                                new Y.Map();
+
+
+                            yBlock.set(
+                                "type",
+                                block.type
+                            );
+
+
+                            yBlock.set(
+                                "level",
+                                block.level ||
+                                0
+                            );
+
+
+                            yBlock.set(
+                                "language",
+                                block.language ||
+                                null
+                            );
+
+
+                            yBlock.set(
+                                "parentId",
+                                block.parentId ||
+                                null
+                            );
+
+
+                            yBlock.set(
+                                "children",
+                                (
+                                    block.children ||
+                                    []
+                                ).map(
+                                    (
+                                        child
+                                    ) =>
+                                        typeof child ===
+                                        "object"
+                                            ? child._id
+                                            : child
+                                )
+                            );
+
+
+                            const yText =
+                                new Y.Text();
+
+
+                            yText.insert(
+                                0,
+                                block.content ||
+                                ""
+                            );
+
+
+                            yBlock.set(
+                                "content",
+                                yText
+                            );
+
+
+                            connection.blocks.set(
+                                block._id,
+                                yBlock
+                            );
+
+
+                            observeYBlock(
+                                block._id,
+                                yBlock
+                            );
+
+
+                            connection
+                                .registerTextForUndo(
+                                    yText
+                                );
+
+                        }
+                    );
+
+                }
+
+
+                setShowVersions(
+                    false
                 );
 
 
@@ -2558,9 +2740,7 @@ function Editor() {
                 !connection ||
                 !connection.undoManager
             ) {
-
                 return;
-
             }
 
 
@@ -2597,9 +2777,7 @@ function Editor() {
                 !connection ||
                 !connection.undoManager
             ) {
-
                 return;
-
             }
 
 
@@ -2622,14 +2800,63 @@ function Editor() {
 
 
     // =========================================
-    // RENDER AST BLOCK
+    // RENDER BLOCK
     // =========================================
 
-    const renderBlock =
+    const renderStyledBlock =
         (
             block,
-            depth = 0
+            depth = 0,
+            visited = new Set()
         ) => {
+
+            // =================================
+            // SAFETY CHECK
+            // =================================
+
+            if (
+                !block ||
+                !block._id
+            ) {
+
+                return null;
+
+            }
+
+
+            const blockKey =
+                String(
+                    block._id
+                );
+
+
+            // Prevent infinite AST recursion
+            if (
+                visited.has(
+                    blockKey
+                )
+            ) {
+
+                console.warn(
+                    "CIRCULAR AST DETECTED:",
+                    blockKey
+                );
+
+                return null;
+
+            }
+
+
+            const nextVisited =
+                new Set(
+                    visited
+                );
+
+
+            nextVisited.add(
+                blockKey
+            );
+
 
             const yBlock =
                 yjsRef.current
@@ -2646,24 +2873,11 @@ function Editor() {
                         block._id
                     }
 
+                    className="syncdoc-block-wrapper"
+
                     style={{
-
                         marginLeft:
-                            `${depth * 30}px`,
-
-                        borderLeft:
-                            depth > 0
-                                ? "2px solid #374151"
-                                : "none",
-
-                        paddingLeft:
-                            depth > 0
-                                ? "15px"
-                                : "0",
-
-                        marginBottom:
-                            "10px"
-
+                            `${depth * 30}px`
                     }}
                 >
 
@@ -2740,10 +2954,7 @@ function Editor() {
                         (
 
                             <div
-                                style={{
-                                    marginTop:
-                                        "10px"
-                                }}
+                                className="syncdoc-block-children"
                             >
 
                                 {
@@ -2760,10 +2971,14 @@ function Editor() {
 
 
                                             const childBlock =
-                                                document.blocks.find(
+                                                (
+                                                    document.blocks ||
+                                                    []
+                                                ).find(
                                                     (
                                                         item
                                                     ) =>
+                                                        item &&
                                                         String(
                                                             item._id
                                                         ) ===
@@ -2782,9 +2997,10 @@ function Editor() {
                                             }
 
 
-                                            return renderBlock(
+                                            return renderStyledBlock(
                                                 childBlock,
-                                                depth + 1
+                                                depth + 1,
+                                                nextVisited
                                             );
 
                                         }
@@ -2812,11 +3028,27 @@ function Editor() {
     ) {
 
         return (
+            <div
+                className="syncdoc-editor"
+            >
 
-            <h2>
-                Loading document...
-            </h2>
+                <div
+                    className="syncdoc-main"
+                >
 
+                    <div
+                        className="syncdoc-content"
+                    >
+
+                        <h2>
+                            Loading document...
+                        </h2>
+
+                    </div>
+
+                </div>
+
+            </div>
         );
 
     }
@@ -2831,11 +3063,27 @@ function Editor() {
     ) {
 
         return (
+            <div
+                className="syncdoc-editor"
+            >
 
-            <h2>
-                Document not found
-            </h2>
+                <div
+                    className="syncdoc-main"
+                >
 
+                    <div
+                        className="syncdoc-content"
+                    >
+
+                        <h2>
+                            Document not found
+                        </h2>
+
+                    </div>
+
+                </div>
+
+            </div>
         );
 
     }
@@ -2848,437 +3096,100 @@ function Editor() {
     return (
 
         <div
-            style={{
-                maxWidth:
-                    "900px",
-
-                margin:
-                    "0 auto",
-
-                padding:
-                    "20px"
-            }}
+            className="syncdoc-editor"
         >
 
             {/* ================================= */}
-            {/* TITLE */}
+            {/* TOP BAR */}
             {/* ================================= */}
 
-            <h1>
-                {document.title}
-            </h1>
-
-
-            {/* ================================= */}
-            {/* TOOLBAR */}
-            {/* ================================= */}
-
-            <div
-                style={{
-
-                    display:
-                        "flex",
-
-                    gap:
-                        "10px",
-
-                    marginBottom:
-                        "20px",
-
-                    flexWrap:
-                        "wrap"
-
-                }}
+            <header
+                className="syncdoc-topbar"
             >
 
-                <button
-                    onClick={() =>
-                        handleAddBlock(
-                            "paragraph"
-                        )
-                    }
+                <div
+                    className="syncdoc-brand"
                 >
 
-                    + Paragraph
+                    <button
+                        className="syncdoc-menu"
+                        type="button"
+                    >
+                        ☰
+                    </button>
 
-                </button>
+
+                    <span
+                        className="syncdoc-document-icon"
+                    >
+                        ▣
+                    </span>
 
 
-                <button
-                    onClick={() =>
-                        handleAddBlock(
-                            "heading"
-                        )
+                    <h1
+                        className="syncdoc-title"
+                    >
+                        {document.title}
+                    </h1>
+
+                </div>
+
+
+                <div
+                    className={
+                        `syncdoc-status ${
+                            connectionStatus
+                        }`
                     }
                 >
-
-                    + Heading
-
-                </button>
-
-
-                <button
-                    onClick={() =>
-                        handleAddBlock(
-                            "code"
-                        )
-                    }
-                >
-
-                    + Code
-
-                </button>
-
-
-                <button
-                    onClick={() =>
-                        handleAddBlock(
-                            "bullet"
-                        )
-                    }
-                >
-
-                    + Bullet
-
-                </button>
-
-
-                <button
-                    onClick={
-                        handleUndo
-                    }
-                >
-
-                    ↶ Undo
-
-                </button>
-
-
-                <button
-                    onClick={
-                        handleRedo
-                    }
-                >
-
-                    ↷ Redo
-
-                </button>
-
-
-                <button
-                    onClick={
-                        handleCreateVersion
-                    }
-                >
-
-                    💾 Save Version
-
-                </button>
-
-
-                <button
-                    onClick={
-                        handleShowVersions
-                    }
-                >
-
-                    🕒 Version History
-
-                </button>
-
-            </div>
-
-
-            {/* ================================= */}
-            {/* VERSION HISTORY */}
-            {/* ================================= */}
-
-            {
-                showVersions && (
 
                     <div
-                        style={{
-
-                            marginBottom:
-                                "20px",
-
-                            padding:
-                                "15px",
-
-                            background:
-                                "#111827",
-
-                            color:
-                                "white",
-
-                            borderRadius:
-                                "8px"
-
-                        }}
-                    >
-
-                        <div
-                            style={{
-
-                                display:
-                                    "flex",
-
-                                justifyContent:
-                                    "space-between",
-
-                                alignItems:
-                                    "center",
-
-                                marginBottom:
-                                    "10px"
-
-                            }}
-                        >
-
-                            <strong>
-                                Version History
-                            </strong>
+                        className="syncdoc-status-dot"
+                    />
 
 
-                            <button
-                                onClick={() =>
-                                    setShowVersions(
-                                        false
-                                    )
-                                }
-                            >
-
-                                Close
-
-                            </button>
-
-                        </div>
-
+                    <span>
 
                         {
-                            versions.length === 0 ? (
+                            connectionStatus ===
+                            "connected"
 
-                                <p>
-                                    No saved versions yet.
-                                </p>
+                                ? "Connected"
 
-                            ) : (
+                                : connectionStatus ===
+                                  "connecting"
 
-                                versions.map(
-                                    (
-                                        version
-                                    ) => (
+                                    ? "Connecting..."
 
-                                        <div
-                                            key={
-                                                version._id
-                                            }
-
-                                            style={{
-
-                                                display:
-                                                    "flex",
-
-                                                justifyContent:
-                                                    "space-between",
-
-                                                alignItems:
-                                                    "center",
-
-                                                padding:
-                                                    "8px",
-
-                                                marginBottom:
-                                                    "6px",
-
-                                                background:
-                                                    "#1f2937",
-
-                                                borderRadius:
-                                                    "6px"
-
-                                            }}
-                                        >
-
-                                            <span>
-
-                                                Version{" "}
-
-                                                {
-                                                    version.versionNumber
-                                                }
-
-                                                {" — "}
-
-                                                {
-                                                    new Date(
-                                                        version.createdAt
-                                                    )
-                                                        .toLocaleString()
-                                                }
-
-                                            </span>
-
-
-                                            <button
-                                                onClick={() =>
-                                                    handleRestoreVersion(
-                                                        version._id
-                                                    )
-                                                }
-                                            >
-
-                                                Restore
-
-                                            </button>
-
-                                        </div>
-
-                                    )
-
-                                )
-
-                            )
+                                    : "Disconnected"
                         }
 
-                    </div>
+                    </span>
 
-                )
-            }
+                </div>
 
-
-            {/* ================================= */}
-            {/* CURRENT USER */}
-            {/* ================================= */}
-
-            <div
-                style={{
-
-                    marginBottom:
-                        "10px",
-
-                    padding:
-                        "10px",
-
-                    background:
-                        "#1f2937",
-
-                    color:
-                        "white",
-
-                    borderRadius:
-                        "8px",
-
-                    width:
-                        "fit-content"
-
-                }}
-            >
-
-                Editing as:{" "}
-
-                <strong>
-                    {currentUser}
-                </strong>
-
-            </div>
+            </header>
 
 
             {/* ================================= */}
-            {/* CONNECTION STATUS */}
+            {/* ACTIVE USERS */}
             {/* ================================= */}
 
             <div
-                style={{
-
-                    marginBottom:
-                        "15px",
-
-                    padding:
-                        "8px 12px",
-
-                    borderRadius:
-                        "8px",
-
-                    width:
-                        "fit-content",
-
-                    background:
-
-                        connectionStatus ===
-                        "connected"
-
-                            ? "#14532d"
-
-                            :
-
-                            connectionStatus ===
-                            "connecting"
-
-                                ? "#854d0e"
-
-                                : "#7f1d1d",
-
-                    color:
-                        "white",
-
-                    fontWeight:
-                        "bold"
-
-                }}
+                className="syncdoc-presence"
             >
 
-                {
-                    connectionStatus ===
-                    "connected" &&
-                    "🟢 Connected"
-                }
+                <div
+                    className="syncdoc-active-label"
+                >
 
+                    <span>
+                        ♡
+                    </span>
 
-                {
-                    connectionStatus ===
-                    "connecting" &&
-                    "🟡 Connecting..."
-                }
+                    ACTIVE
 
-
-                {
-                    connectionStatus ===
-                    "disconnected" &&
-                    "🔴 Disconnected"
-                }
-
-            </div>
-
-
-            {/* ================================= */}
-            {/* ONLINE USERS */}
-            {/* ================================= */}
-
-            <div
-                style={{
-
-                    display:
-                        "flex",
-
-                    alignItems:
-                        "center",
-
-                    gap:
-                        "8px",
-
-                    marginBottom:
-                        "20px",
-
-                    flexWrap:
-                        "wrap"
-
-                }}
-            >
-
-                <strong>
-                    Online:
-                </strong>
+                </div>
 
 
                 {
@@ -3286,40 +3197,59 @@ function Editor() {
                         (
                             user,
                             index
-                        ) => (
+                        ) => {
 
-                            <span
-                                key={
-                                    user.name +
-                                    index
-                                }
+                            const isCurrentUser =
+                                user.name ===
+                                currentUser;
 
-                                style={{
 
-                                    padding:
-                                        "5px 10px",
+                            return (
 
-                                    borderRadius:
-                                        "20px",
+                                <div
+                                    key={
+                                        user.name +
+                                        index
+                                    }
 
-                                    background:
-                                        "#1f7a4d",
+                                    className={
+                                        `syncdoc-user-pill ${
+                                            isCurrentUser
+                                                ? "current"
+                                                : ""
+                                        }`
+                                    }
+                                >
 
-                                    color:
-                                        "white"
+                                    <div
+                                        className="syncdoc-avatar"
+                                    >
 
-                                }}
-                            >
+                                        {
+                                            user.name
+                                                ?.charAt(
+                                                    0
+                                                )
+                                                .toUpperCase()
+                                        }
 
-                                🟢{" "}
+                                    </div>
 
-                                {
-                                    user.name
-                                }
 
-                            </span>
+                                    <div
+                                        className="syncdoc-online-dot"
+                                    />
 
-                        )
+
+                                    {
+                                        user.name
+                                    }
+
+                                </div>
+
+                            );
+
+                        }
                     )
                 }
 
@@ -3327,94 +3257,362 @@ function Editor() {
 
 
             {/* ================================= */}
-            {/* ROOT DROP ZONE */}
+            {/* MAIN */}
+            {/* ================================= */}
+
+            <main
+                className="syncdoc-main"
+            >
+
+                <div
+                    className="syncdoc-content"
+                >
+
+                    {/* ================================= */}
+                    {/* DOCUMENT DESCRIPTION */}
+                    {/* ================================= */}
+
+                    <div
+                        className="syncdoc-description"
+                    >
+
+                        This specification details the
+                        architecture and implementation
+                        guidelines for the real-time
+                        collaboration engine.
+
+                    </div>
+
+
+                    {/* ================================= */}
+                    {/* VERSION HISTORY */}
+                    {/* ================================= */}
+
+                    {
+                        showVersions && (
+
+                            <div
+                                className="syncdoc-version-panel"
+                            >
+
+                                <div
+                                    className="syncdoc-version-header"
+                                >
+
+                                    <span>
+                                        Version History
+                                    </span>
+
+
+                                    <button
+                                        className="syncdoc-version-restore"
+
+                                        onClick={() =>
+                                            setShowVersions(
+                                                false
+                                            )
+                                        }
+                                    >
+
+                                        Close
+
+                                    </button>
+
+                                </div>
+
+
+                                {
+                                    versions.length ===
+                                    0 ? (
+
+                                        <div>
+                                            No saved versions yet.
+                                        </div>
+
+                                    ) : (
+
+                                        versions.map(
+                                            (
+                                                version
+                                            ) => (
+
+                                                <div
+                                                    key={
+                                                        version._id
+                                                    }
+
+                                                    className="syncdoc-version-item"
+                                                >
+
+                                                    <span>
+
+                                                        Version{" "}
+
+                                                        {
+                                                            version.versionNumber
+                                                        }
+
+                                                        {" · "}
+
+                                                        {
+                                                            new Date(
+                                                                version.createdAt
+                                                            )
+                                                                .toLocaleString()
+                                                        }
+
+                                                    </span>
+
+
+                                                    <button
+                                                        className="syncdoc-version-restore"
+
+                                                        onClick={() =>
+                                                            handleRestoreVersion(
+                                                                version._id
+                                                            )
+                                                        }
+                                                    >
+
+                                                        Restore
+
+                                                    </button>
+
+                                                </div>
+
+                                            )
+                                        )
+
+                                    )
+                                }
+
+                            </div>
+
+                        )
+                    }
+
+
+                    {/* ================================= */}
+                    {/* ROOT DROP ZONE */}
+                    {/* ================================= */}
+
+                    <div
+                        className="syncdoc-root-dropzone"
+
+                        onDragOver={
+                            handleDragOver
+                        }
+
+                        onDrop={
+                            (
+                                event
+                            ) => {
+
+                                event.preventDefault();
+
+
+                                const blockId =
+                                    event.dataTransfer
+                                        .getData(
+                                            "text/plain"
+                                        );
+
+
+                                if (
+                                    blockId
+                                ) {
+
+                                    handleMoveToRoot(
+                                        blockId
+                                    );
+
+                                }
+
+                            }
+                        }
+                    >
+
+                        Drop block here to move it to root
+
+                    </div>
+
+
+                    {/* ================================= */}
+                    {/* AST DOCUMENT */}
+                    {/* ================================= */}
+
+                    <div>
+
+                        {
+                            (
+                                document.blocks ||
+                                []
+                            )
+                                .filter(
+                                    (
+                                        block
+                                    ) =>
+                                        block &&
+                                        block._id &&
+                                        !block.parentId
+                                )
+                                .map(
+                                    (
+                                        block
+                                    ) =>
+                                        renderStyledBlock(
+                                            block,
+                                            0
+                                        )
+                                )
+                        }
+
+                    </div>
+
+                </div>
+
+            </main>
+
+
+            {/* ================================= */}
+            {/* BOTTOM TOOLBAR */}
             {/* ================================= */}
 
             <div
-                onDragOver={
-                    handleDragOver
-                }
-
-                onDrop={
-                    (
-                        event
-                    ) => {
-
-                        event.preventDefault();
-
-
-                        const blockId =
-                            event.dataTransfer
-                                .getData(
-                                    "text/plain"
-                                );
-
-
-                        if (
-                            blockId
-                        ) {
-
-                            handleMoveToRoot(
-                                blockId
-                            );
-
-                        }
-
-                    }
-                }
-
-                style={{
-
-                    marginBottom:
-                        "20px",
-
-                    padding:
-                        "12px",
-
-                    border:
-                        "2px dashed #374151",
-
-                    borderRadius:
-                        "8px",
-
-                    color:
-                        "#9ca3af",
-
-                    textAlign:
-                        "center"
-
-                }}
+                className="syncdoc-toolbar"
             >
 
-                Drop here to move block to root
+                <div
+                    className="syncdoc-toolbar-group"
+                >
 
-            </div>
+                    <button
+                        className="syncdoc-tool"
+
+                        title="Paragraph"
+
+                        onClick={() =>
+                            handleAddBlock(
+                                "paragraph"
+                            )
+                        }
+                    >
+                        ≡
+                    </button>
 
 
-            {/* ================================= */}
-            {/* AST DOCUMENT */}
-            {/* ================================= */}
+                    <button
+                        className="syncdoc-tool"
 
-            <div>
+                        title="Heading"
 
-                {
-                    document.blocks
-                        .filter(
-                            (
-                                block
-                            ) =>
-                                !block.parentId
+                        onClick={() =>
+                            handleAddBlock(
+                                "heading"
+                            )
+                        }
+                    >
+                        H1
+                    </button>
+
+
+                    <button
+                        className="syncdoc-tool"
+
+                        title="Bullet"
+
+                        onClick={() =>
+                            handleAddBlock(
+                                "bullet"
+                            )
+                        }
+                    >
+                        ☷
+                    </button>
+
+                </div>
+
+
+                <div
+                    className="syncdoc-toolbar-divider"
+                />
+
+
+                <button
+                    className="syncdoc-tool active"
+
+                    title="Code"
+
+                    onClick={() =>
+                        handleAddBlock(
+                            "code"
                         )
-                        .map(
-                            (
-                                block
-                            ) =>
-                                renderBlock(
-                                    block,
-                                    0
-                                )
-                        )
-                }
+                    }
+                >
+                    {"</>"}
+                </button>
+
+
+                <div
+                    className="syncdoc-toolbar-divider"
+                />
+
+
+                <button
+                    className="syncdoc-tool"
+
+                    title="Undo"
+
+                    onClick={
+                        handleUndo
+                    }
+                >
+                    ↶
+                </button>
+
+
+                <button
+                    className="syncdoc-tool"
+
+                    title="Redo"
+
+                    onClick={
+                        handleRedo
+                    }
+                >
+                    ↷
+                </button>
+
+
+                <div
+                    className="syncdoc-toolbar-spacer"
+                />
+
+
+                <button
+                    className="syncdoc-tool"
+
+                    title="Version History"
+
+                    onClick={
+                        handleShowVersions
+                    }
+                >
+                    ◷
+                </button>
+
+
+                <button
+                    className="syncdoc-save"
+
+                    onClick={
+                        handleCreateVersion
+                    }
+                >
+
+                    💾 SAVE
+
+                </button>
 
             </div>
 

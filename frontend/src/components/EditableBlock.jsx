@@ -4,17 +4,29 @@ import {
 } from "react";
 
 function EditableBlock({
+
     block,
+
     yBlock,
+
     onChange,
+
     onFocus,
+
     onBlur,
+
     onDelete,
+
     editingUsers = [],
+
     draggable = false,
+
     onDragStart,
+
     onDragOver,
+
     onDrop
+
 }) {
 
     // =========================================
@@ -22,25 +34,29 @@ function EditableBlock({
     // =========================================
 
     const yText =
-        yBlock?.get("content");
+        yBlock?.get(
+            "content"
+        );
 
 
     // =========================================
-    // LOCAL CONTENT STATE
+    // CONTENT
     // =========================================
 
     const [
         content,
         setContent
     ] = useState(
+
         yText
             ? yText.toString()
             : block.content || ""
+
     );
 
 
     // =========================================
-    // UPDATE LOCAL STATE WHEN BLOCK CHANGES
+    // SYNC BLOCK CONTENT
     // =========================================
 
     useEffect(() => {
@@ -62,7 +78,7 @@ function EditableBlock({
 
 
     // =========================================
-    // LISTEN FOR REMOTE / UNDO / REDO CHANGES
+    // REMOTE YJS CHANGES
     // =========================================
 
     useEffect(() => {
@@ -72,17 +88,14 @@ function EditableBlock({
         }
 
 
-        const handleYjsChange = () => {
+        const handleYjsChange =
+            () => {
 
-            const newContent =
-                yText.toString();
+                setContent(
+                    yText.toString()
+                );
 
-
-            setContent(
-                newContent
-            );
-
-        };
+            };
 
 
         yText.observe(
@@ -104,153 +117,127 @@ function EditableBlock({
 
 
     // =========================================
-    // HANDLE TEXT CHANGE
+    // TEXT CHANGE
     // =========================================
 
-    const handleChange = (
-        event
-    ) => {
+    const handleChange =
+        (event) => {
 
-        const newContent =
-            event.target.value;
-
-
-        // =====================================
-        // UPDATE YJS
-        // =====================================
-
-        if (yText) {
-
-            const oldContent =
-                yText.toString();
+            const newContent =
+                event.target.value;
 
 
-            // ---------------------------------
-            // FIND COMMON PREFIX
-            // ---------------------------------
+            if (yText) {
 
-            let start = 0;
-
-
-            while (
-                start <
-                    oldContent.length &&
-                start <
-                    newContent.length &&
-                oldContent[start] ===
-                    newContent[start]
-            ) {
-
-                start++;
-
-            }
+                const oldContent =
+                    yText.toString();
 
 
-            // ---------------------------------
-            // FIND COMMON SUFFIX
-            // ---------------------------------
-
-            let oldEnd =
-                oldContent.length;
+                let start = 0;
 
 
-            let newEnd =
-                newContent.length;
+                while (
+                    start <
+                        oldContent.length &&
+                    start <
+                        newContent.length &&
+                    oldContent[start] ===
+                        newContent[start]
+                ) {
+
+                    start++;
+
+                }
 
 
-            while (
-                oldEnd > start &&
-                newEnd > start &&
-                oldContent[
-                    oldEnd - 1
-                ] ===
-                    newContent[
-                        newEnd - 1
-                    ]
-            ) {
-
-                oldEnd--;
-
-                newEnd--;
-
-            }
+                let oldEnd =
+                    oldContent.length;
 
 
-            // ---------------------------------
-            // CALCULATE CHANGE
-            // ---------------------------------
-
-            const deleteLength =
-                oldEnd - start;
+                let newEnd =
+                    newContent.length;
 
 
-            const insertedText =
-                newContent.slice(
-                    start,
-                    newEnd
+                while (
+                    oldEnd > start &&
+                    newEnd > start &&
+                    oldContent[
+                        oldEnd - 1
+                    ] ===
+                        newContent[
+                            newEnd - 1
+                        ]
+                ) {
+
+                    oldEnd--;
+
+                    newEnd--;
+
+                }
+
+
+                const deleteLength =
+                    oldEnd - start;
+
+
+                const insertedText =
+                    newContent.slice(
+                        start,
+                        newEnd
+                    );
+
+
+                yText.doc.transact(
+
+                    () => {
+
+                        if (
+                            deleteLength > 0
+                        ) {
+
+                            yText.delete(
+                                start,
+                                deleteLength
+                            );
+
+                        }
+
+
+                        if (
+                            insertedText.length > 0
+                        ) {
+
+                            yText.insert(
+                                start,
+                                insertedText
+                            );
+
+                        }
+
+                    },
+
+                    "local"
+
                 );
 
-
-            // =================================
-            // LOCAL TRANSACTION
-            // =================================
-
-            yText.doc.transact(
-                () => {
-
-                    if (
-                        deleteLength > 0
-                    ) {
-
-                        yText.delete(
-                            start,
-                            deleteLength
-                        );
-
-                    }
+            }
 
 
-                    if (
-                        insertedText.length > 0
-                    ) {
-
-                        yText.insert(
-                            start,
-                            insertedText
-                        );
-
-                    }
-
-                },
-                "local"
+            setContent(
+                newContent
             );
 
-        }
 
+            onChange(
+                block._id,
+                newContent
+            );
 
-        // =====================================
-        // UPDATE REACT STATE
-        // =====================================
-
-        setContent(
-            newContent
-        );
-
-
-        // =====================================
-        // SAVE TO MONGODB
-        // =====================================
-
-        onChange(
-            block._id,
-            newContent
-        );
-
-    };
+        };
 
 
     // =========================================
-    // EDITING USER INDICATOR
+    // EDITING USERS
     // =========================================
 
     const editingIndicator =
@@ -258,40 +245,16 @@ function EditableBlock({
             ? (
 
                 <div
-                    style={{
-                        marginBottom:
-                            "6px",
-
-                        padding:
-                            "6px 10px",
-
-                        color:
-                            "#22c55e",
-
-                        fontSize:
-                            "13px",
-
-                        fontWeight:
-                            "bold",
-
-                        background:
-                            "#111827",
-
-                        borderRadius:
-                            "6px",
-
-                        width:
-                            "fit-content"
-                    }}
+                    className="syncdoc-editing-indicator"
                 >
 
-                    🟢{" "}
+                    ✎{" "}
 
                     {editingUsers
                         .map(
                             (user) =>
                                 typeof user ===
-                                "string"
+                                    "string"
                                     ? user
                                     : user.name
                         )
@@ -301,8 +264,8 @@ function EditableBlock({
 
                     {editingUsers.length ===
                     1
-                        ? "is editing this block"
-                        : "are editing this block"}
+                        ? "is editing"
+                        : "are editing"}
 
                 </div>
 
@@ -311,7 +274,7 @@ function EditableBlock({
 
 
     // =========================================
-    // COMMON TEXTAREA PROPERTIES
+    // COMMON TEXTAREA
     // =========================================
 
     const commonProps = {
@@ -322,87 +285,93 @@ function EditableBlock({
         onChange:
             handleChange,
 
-        onFocus: () => {
+        onFocus:
+            () =>
+                onFocus(
+                    block._id
+                ),
 
-            onFocus(
-                block._id
-            );
+        onBlur:
+            () =>
+                onBlur(
+                    block._id
+                ),
 
-        },
-
-        onBlur: () => {
-
-            onBlur(
-                block._id
-            );
-
-        },
-
-        style: {
-
-            width:
-                "100%",
-
-            padding:
-                "10px",
-
-            color:
-                "white",
-
-            borderRadius:
-                "8px",
-
-            resize:
-                "vertical",
-
-            outline:
-                "none"
-
-        }
+        draggable:
+            false
 
     };
 
 
     // =========================================
-    // DELETE BUTTON
+    // SHARED BLOCK HEADER
     // =========================================
 
-    const deleteButton = (
+    const blockHeader = (
 
-        <button
-            onClick={() =>
-                onDelete(
-                    block._id
-                )
-            }
-
-            style={{
-                marginBottom:
-                    "5px",
-
-                padding:
-                    "5px 10px",
-
-                background:
-                    "#dc2626",
-
-                color:
-                    "white",
-
-                border:
-                    "none",
-
-                borderRadius:
-                    "5px",
-
-                cursor:
-                    "pointer"
-            }}
+        <div
+            className="syncdoc-block-top"
         >
 
-            Delete
+            <div
+                className="syncdoc-drag-handle"
+                title="Drag block"
+            >
+                ⋮⋮
+            </div>
 
-        </button>
+
+            <div
+                className="syncdoc-block-type"
+            >
+
+                {block.type ===
+                    "heading" &&
+                    "heading"}
+
+                {block.type ===
+                    "paragraph" &&
+                    "paragraph"}
+
+                {block.type ===
+                    "code" &&
+                    (
+                        block.language ||
+                        "code"
+                    )}
+
+                {block.type ===
+                    "bullet" &&
+                    "bullet"}
+
+                {![
+                    "heading",
+                    "paragraph",
+                    "code",
+                    "bullet"
+                ].includes(
+                    block.type
+                ) &&
+                    block.type}
+
+            </div>
+
+
+            <button
+                className="syncdoc-delete"
+                onClick={() =>
+                    onDelete(
+                        block._id
+                    )
+                }
+                type="button"
+            >
+
+                ×
+
+            </button>
+
+        </div>
 
     );
 
@@ -419,45 +388,43 @@ function EditableBlock({
         return (
 
             <div
-                draggable={draggable}
-                onDragStart={onDragStart}
-                onDragOver={onDragOver}
-                onDrop={onDrop}
-                style={{
-                    marginBottom:
-                        "15px"
-                }}
+                className="syncdoc-block"
+                draggable={
+                    draggable
+                }
+                onDragStart={
+                    onDragStart
+                }
+                onDragOver={
+                    onDragOver
+                }
+                onDrop={
+                    onDrop
+                }
             >
+
+                {blockHeader}
 
                 {editingIndicator}
 
-                {deleteButton}
-
 
                 <textarea
+
                     {...commonProps}
+
+                    className="syncdoc-textarea syncdoc-heading"
 
                     rows={1}
 
                     style={{
-                        ...commonProps.style,
-
                         fontSize:
                             block.level === 1
-                                ? "30px"
+                                ? "28px"
                                 : block.level === 3
-                                    ? "22px"
-                                    : "26px",
-
-                        fontWeight:
-                            "bold",
-
-                        background:
-                            "#151C2C",
-
-                        border:
-                            "1px solid #374151"
+                                    ? "20px"
+                                    : "24px"
                     }}
+
                 />
 
             </div>
@@ -479,49 +446,84 @@ function EditableBlock({
         return (
 
             <div
-                draggable={draggable}
-                onDragStart={onDragStart}
-                onDragOver={onDragOver}
-                onDrop={onDrop}
-                style={{
-                    marginBottom:
-                        "15px"
-                }}
+                className="syncdoc-block"
+                draggable={
+                    draggable
+                }
+                onDragStart={
+                    onDragStart
+                }
+                onDragOver={
+                    onDragOver
+                }
+                onDrop={
+                    onDrop
+                }
             >
+
+                <div
+                    className="syncdoc-block-top"
+                >
+
+                    <div
+                        className="syncdoc-drag-handle"
+                    >
+                        ⋮⋮
+                    </div>
+
+
+                    <div
+                        className="syncdoc-block-type"
+                    >
+                        <span>
+                            ◇
+                        </span>
+
+                        {block.language ||
+                            "javascript"}
+
+                    </div>
+
+
+                    <button
+                        className="syncdoc-delete"
+                        onClick={() =>
+                            onDelete(
+                                block._id
+                            )
+                        }
+                        type="button"
+                    >
+                        ×
+                    </button>
+
+                </div>
+
 
                 {editingIndicator}
 
-                {deleteButton}
+
+                <div
+                    className="syncdoc-code-wrapper"
+                >
+
+                    <div
+                        className="syncdoc-code-line-numbers"
+                    >
+                        1
+                    </div>
 
 
-                <textarea
-                    {...commonProps}
+                    <textarea
+                        {...commonProps}
+                        className="syncdoc-textarea syncdoc-code"
+                        rows={7}
+                        spellCheck={
+                            false
+                        }
+                    />
 
-                    rows={6}
-
-                    spellCheck={
-                        false
-                    }
-
-                    style={{
-                        ...commonProps.style,
-
-                        background:
-                            "#111827",
-
-                        color:
-                            "#e5e7eb",
-
-                        fontFamily:
-                            "monospace",
-
-                        fontSize:
-                            "14px",
-
-                        border:
-                            "1px solid #374151"
-                    }}
-                />
+                </div>
 
             </div>
 
@@ -542,63 +544,41 @@ function EditableBlock({
         return (
 
             <div
-                draggable={draggable}
-                onDragStart={onDragStart}
-                onDragOver={onDragOver}
-                onDrop={onDrop}
-                style={{
-                    marginBottom:
-                        "10px"
-                }}
+                className="syncdoc-block syncdoc-bullet-block"
+                draggable={
+                    draggable
+                }
+                onDragStart={
+                    onDragStart
+                }
+                onDragOver={
+                    onDragOver
+                }
+                onDrop={
+                    onDrop
+                }
             >
+
+                {blockHeader}
 
                 {editingIndicator}
 
-                {deleteButton}
-
 
                 <div
-                    style={{
-                        display:
-                            "flex",
-
-                        alignItems:
-                            "flex-start"
-                    }}
+                    className="syncdoc-bullet-row"
                 >
 
                     <span
-                        style={{
-                            color:
-                                "white",
-
-                            fontSize:
-                                "20px",
-
-                            marginRight:
-                                "10px"
-                        }}
+                        className="syncdoc-bullet"
                     >
-
                         •
-
                     </span>
 
 
                     <textarea
                         {...commonProps}
-
+                        className="syncdoc-textarea"
                         rows={1}
-
-                        style={{
-                            ...commonProps.style,
-
-                            background:
-                                "#151C2C",
-
-                            border:
-                                "1px solid #374151"
-                        }}
                     />
 
                 </div>
@@ -617,38 +597,30 @@ function EditableBlock({
     return (
 
         <div
-            draggable={draggable}
-            onDragStart={onDragStart}
-            onDragOver={onDragOver}
-            onDrop={onDrop}
-            style={{
-                marginBottom:
-                    "15px"
-            }}
+            className="syncdoc-block"
+            draggable={
+                draggable
+            }
+            onDragStart={
+                onDragStart
+            }
+            onDragOver={
+                onDragOver
+            }
+            onDrop={
+                onDrop
+            }
         >
 
-            {editingIndicator}
+            {blockHeader}
 
-            {deleteButton}
+            {editingIndicator}
 
 
             <textarea
                 {...commonProps}
-
+                className="syncdoc-textarea"
                 rows={3}
-
-                style={{
-                    ...commonProps.style,
-
-                    background:
-                        "#151C2C",
-
-                    border:
-                        "1px solid #374151",
-
-                    fontSize:
-                        "16px"
-                }}
             />
 
         </div>
