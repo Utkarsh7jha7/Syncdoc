@@ -39,44 +39,33 @@ router.get(
     "/:id",
     getDocument
 );
-
-
 // DELETE DOCUMENT
 router.delete(
     "/:id",
     deleteDocument
 );
-
-
 // =========================================
 // DOCUMENT BLOCK ROUTES
-// =========================================
-
+// ====================================
 // ADD BLOCK TO DOCUMENT
 router.post(
     "/:documentId/blocks",
     addBlockToDocument
 );
 
-
 // REORDER ROOT BLOCKS
 router.put(
     "/:documentId/reorder",
     reorderBlocks
 );
-
-
 // =========================================
 // VERSION HISTORY
 // =========================================
-
 // CREATE VERSION
 router.post(
     "/:documentId/versions",
     createVersion
 );
-
-
 // GET VERSION HISTORY
 router.get(
     "/:documentId/versions",
