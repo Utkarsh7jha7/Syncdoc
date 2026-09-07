@@ -88,6 +88,25 @@
 
     font-size: 23px;
 }
+.syncdoc-logout {
+    border: 1px solid #30405e;
+
+    background: transparent;
+
+    color: #c7d0df;
+
+    padding: 8px 14px;
+
+    border-radius: 8px;
+
+    cursor: pointer;
+}
+
+
+.syncdoc-logout:hover {
+    border-color: #ef4444;
+    color: #fca5a5;
+}
 
 
 .syncdoc-title {
