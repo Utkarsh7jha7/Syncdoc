@@ -7,7 +7,9 @@ import {
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import Editor from "./pages/Editor";
+import NewDocument from "./pages/NewDocument";
+import DocumentEditor from "./pages/DocumentEditor";
+import Fab from "./components/Fab";
 
 import { getToken } from "./services/userService";
 
@@ -26,7 +28,8 @@ const ProtectedRoute = ({ children }) => {
 function App() {
     return (
         <BrowserRouter>
-
+            {/* Floating Action Button */}
+            <Fab />
             <Routes>
 
                 <Route
@@ -40,10 +43,19 @@ function App() {
                 />
 
                 <Route
-                    path="/editor"
+                    path="/new-doc"
                     element={
                         <ProtectedRoute>
-                            <Editor />
+                            <NewDocument />
+                        </ProtectedRoute>
+                    }
+                />
+
+                <Route
+                    path="/doc/:id"
+                    element={
+                        <ProtectedRoute>
+                            <DocumentEditor />
                         </ProtectedRoute>
                     }
                 />
@@ -52,7 +64,7 @@ function App() {
                     path="/"
                     element={
                         <Navigate
-                            to="/editor"
+                            to="/new-doc"
                             replace
                         />
                     }

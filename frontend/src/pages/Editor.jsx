@@ -21,9 +21,9 @@ import { createYjsConnection } from "../services/yjsService";
 import * as Y from "yjs";
 import "./Editor.css";
 
-const DOCUMENT_ID = "6a7c775e1e1354cef663ebc5";
+// documentId will be passed via prop
 
-function Editor() {
+function Editor({ documentId }) {
     const currentUser = getCurrentUser();
 
     const [document, setDocument] = useState(null);
@@ -126,7 +126,7 @@ function Editor() {
         const loadDocument = async () => {
             try {
                 const data = await getDocument(
-                    DOCUMENT_ID
+                    documentId
                 );
 
                 if (!data || !data.document) {
@@ -137,7 +137,7 @@ function Editor() {
                 setDocument(data.document);
 
                 connection = createYjsConnection(
-                    DOCUMENT_ID,
+                    documentId,
                     currentUser,
                     (status) => {
                         setConnectionStatus(status);
@@ -526,7 +526,7 @@ function Editor() {
 
                 children: [],
 
-                documentId: DOCUMENT_ID
+                documentId: documentId
             };
 
             const data =
@@ -972,7 +972,7 @@ function Editor() {
             );
 
             await reorderBlocks(
-                DOCUMENT_ID,
+                documentId,
                 rootIds
             );
 
@@ -1277,7 +1277,7 @@ function Editor() {
                 );
 
         await reorderBlocks(
-            DOCUMENT_ID,
+            documentId,
             newRootIds
         );
 
@@ -1535,12 +1535,12 @@ function Editor() {
         async () => {
             try {
                 await createVersion(
-                    DOCUMENT_ID
+                    documentId
                 );
 
                 const data =
                     await getVersions(
-                        DOCUMENT_ID
+                        documentId
                     );
 
                 setVersions(
@@ -1567,7 +1567,7 @@ function Editor() {
             try {
                 const data =
                     await getVersions(
-                        DOCUMENT_ID
+                        documentId
                     );
 
                 setVersions(
@@ -1593,13 +1593,13 @@ function Editor() {
         async (versionId) => {
             try {
                 await restoreVersion(
-                    DOCUMENT_ID,
+                    documentId,
                     versionId
                 );
 
                 const data =
                     await getDocument(
-                        DOCUMENT_ID
+                        documentId
                     );
 
                 setDocument(
