@@ -7,18 +7,24 @@ import {
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import NewDocument from "./pages/NewDocument";
+import Documents from "./pages/Documents";
 import DocumentEditor from "./pages/DocumentEditor";
-import Fab from "./components/Fab";
 
 import { getToken } from "./services/userService";
 
 
-const ProtectedRoute = ({ children }) => {
+const ProtectedRoute = ({
+    children
+}) => {
     const token = getToken();
 
     if (!token) {
-        return <Navigate to="/login" replace />;
+        return (
+            <Navigate
+                to="/login"
+                replace
+            />
+        );
     }
 
     return children;
@@ -28,28 +34,42 @@ const ProtectedRoute = ({ children }) => {
 function App() {
     return (
         <BrowserRouter>
-            {/* Floating Action Button */}
-            <Fab />
+
             <Routes>
+
+                {/* LOGIN */}
 
                 <Route
                     path="/login"
-                    element={<Login />}
+                    element={
+                        <Login />
+                    }
                 />
+
+
+                {/* REGISTER */}
 
                 <Route
                     path="/register"
-                    element={<Register />}
+                    element={
+                        <Register />
+                    }
                 />
 
+
+                {/* DOCUMENT LIST */}
+
                 <Route
-                    path="/new-doc"
+                    path="/documents"
                     element={
                         <ProtectedRoute>
-                            <NewDocument />
+                            <Documents />
                         </ProtectedRoute>
                     }
                 />
+
+
+                {/* DOCUMENT EDITOR */}
 
                 <Route
                     path="/doc/:id"
@@ -60,11 +80,14 @@ function App() {
                     }
                 />
 
+
+                {/* DEFAULT */}
+
                 <Route
                     path="/"
                     element={
                         <Navigate
-                            to="/new-doc"
+                            to="/documents"
                             replace
                         />
                     }
@@ -75,6 +98,5 @@ function App() {
         </BrowserRouter>
     );
 }
-
 
 export default App;
