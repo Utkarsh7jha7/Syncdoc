@@ -201,7 +201,21 @@
         opacity: 0.45;
     }
 }
+.syncdoc-back-documents {
+    border: 1px solid #30405e;
+    background: transparent;
+    color: #cbd5e1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    white-space: nowrap;
+}
 
+.syncdoc-back-documents:hover {
+    border-color: #10b981;
+    color: #4edea3;
+}
 
 /* =========================================
    ACTIVE USERS BAR

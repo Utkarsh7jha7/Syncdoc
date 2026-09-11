@@ -13,9 +13,7 @@ import DocumentEditor from "./pages/DocumentEditor";
 import { getToken } from "./services/userService";
 
 
-const ProtectedRoute = ({
-    children
-}) => {
+const ProtectedRoute = ({ children }) => {
     const token = getToken();
 
     if (!token) {
@@ -34,31 +32,21 @@ const ProtectedRoute = ({
 function App() {
     return (
         <BrowserRouter>
-
             <Routes>
 
                 {/* LOGIN */}
-
                 <Route
                     path="/login"
-                    element={
-                        <Login />
-                    }
+                    element={<Login />}
                 />
-
 
                 {/* REGISTER */}
-
                 <Route
                     path="/register"
-                    element={
-                        <Register />
-                    }
+                    element={<Register />}
                 />
 
-
                 {/* DOCUMENT LIST */}
-
                 <Route
                     path="/documents"
                     element={
@@ -68,9 +56,7 @@ function App() {
                     }
                 />
 
-
                 {/* DOCUMENT EDITOR */}
-
                 <Route
                     path="/doc/:id"
                     element={
@@ -80,9 +66,18 @@ function App() {
                     }
                 />
 
+                {/* OLD EDITOR ROUTE */}
+                <Route
+                    path="/editor"
+                    element={
+                        <Navigate
+                            to="/documents"
+                            replace
+                        />
+                    }
+                />
 
                 {/* DEFAULT */}
-
                 <Route
                     path="/"
                     element={
@@ -94,7 +89,6 @@ function App() {
                 />
 
             </Routes>
-
         </BrowserRouter>
     );
 }

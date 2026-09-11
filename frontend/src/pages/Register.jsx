@@ -31,7 +31,7 @@ const Register = () => {
                 password
             );
 
-            navigate("/editor");
+            navigate("/documents");
 
         } catch (error) {
 

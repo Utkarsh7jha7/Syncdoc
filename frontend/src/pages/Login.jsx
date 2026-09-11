@@ -29,7 +29,7 @@ const Login = () => {
                 password
             );
 
-            navigate("/editor");
+            navigate("/documents");
 
         } catch (error) {
 
